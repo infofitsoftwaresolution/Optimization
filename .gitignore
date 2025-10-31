@@ -1,0 +1,50 @@
+# Results directory
+results/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# AWS
+.aws/
+
+# Logs
+*.log
+
+# Generated CSV files
+# Note: Keep example_prompts.csv in repo, ignore other CSVs
+extracted_prompts.csv
+
+# Temporary/test files (keep only core framework files)
+add_demo_message.py
+check_json_structure.py
+check_multiple_messages.py
+demo_test_prompts.json
+demo_test_summary.md
+extract_prompts_to_csv.py
+extracted_prompts.csv
+LlamaVsSonnet.py
+show_message_extraction.py
+test_json_cleaning.py
+verify_csv.py
+verify_extraction.py
+OVERVIEW.md
+PROJECT_STRUCTURE.md
+WORKFLOW.md
