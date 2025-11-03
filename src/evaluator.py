@@ -71,6 +71,7 @@ class BedrockEvaluator:
             "model_name": model_name,
             "model_id": model_id,
             "prompt_id": prompt_id,
+            "input_prompt": prompt,  # Store the input prompt for display
             "input_tokens": input_tokens,
             "output_tokens": 0,
             "latency_ms": 0,

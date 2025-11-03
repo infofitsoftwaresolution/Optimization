@@ -33,7 +33,9 @@ class MetricsLogger:
             "cost_usd_input", "cost_usd_output", "cost_usd_total"
         ]
         
-        # Add response column if present
+        # Add input_prompt and response columns if present
+        if "input_prompt" in df.columns:
+            expected_columns.append("input_prompt")
         if "response" in df.columns:
             expected_columns.append("response")
         

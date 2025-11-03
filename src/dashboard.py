@@ -532,6 +532,7 @@ with tab1:
                                     "model_name": model.get("name", "unknown"),
                                     "model_id": model.get("bedrock_model_id", "unknown"),
                                     "prompt_id": f"prompt_{prompt_idx+1}" if len(prompts_to_evaluate) > 1 else None,
+                                    "input_prompt": final_prompt,  # Store input prompt even for errors
                                     "input_tokens": 0,
                                     "output_tokens": 0,
                                     "latency_ms": 0,
@@ -667,7 +668,23 @@ with tab1:
                     expander_title += " ✅"
                 
                 with st.expander(expander_title, expanded=False):
+                    # Display Input Prompt/JSON
+                    input_prompt = result.get('input_prompt', '')
+                    if input_prompt:
+                        st.markdown("### 📥 Input Prompt/JSON")
+                        # Try to format as JSON if valid JSON
+                        try:
+                            input_json_obj = json.loads(input_prompt)
+                            st.json(input_json_obj)
+                        except (json.JSONDecodeError, ValueError, TypeError):
+                            # If not valid JSON, display as text
+                            st.code(input_prompt, language='text')
+                        
+                        st.markdown("---")
+                    
+                    # Display Output Response/JSON
                     if status == 'success' and response:
+                        st.markdown("### 📤 Output Response/JSON")
                         # Try to format as JSON if valid JSON
                         try:
                             json_obj = json.loads(response)
@@ -678,20 +695,22 @@ with tab1:
                             st.code(response, language='text')
                         
                         # Show raw response option
-                        with st.expander("📋 View Raw Response", expanded=False):
+                        with st.expander("📋 View Raw Output Response", expanded=False):
                             st.text_area(
-                                "Full Response Text",
+                                "Full Output Response Text",
                                 value=response,
                                 height=200,
                                 key=f"raw_response_{idx}",
                                 disabled=True
                             )
                     elif status == 'error':
+                        st.markdown("### 📤 Output Response/JSON")
                         st.error(f"**Error:** {error if error else 'Unknown error occurred'}")
                         if response:
                             st.markdown("**Partial Response:**")
                             st.code(response, language='text')
                     else:
+                        st.markdown("### 📤 Output Response/JSON")
                         st.warning("No response available")
         
         st.markdown("---")
