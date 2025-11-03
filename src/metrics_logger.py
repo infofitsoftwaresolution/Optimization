@@ -39,17 +39,34 @@ class MetricsLogger:
         if "response" in df.columns:
             expected_columns.append("response")
         
+        # If file exists, read existing columns to ensure compatibility
+        existing_columns = []
+        if self.raw_csv_path.exists():
+            try:
+                existing_df = pd.read_csv(self.raw_csv_path, nrows=0)  # Just read header
+                existing_columns = list(existing_df.columns)
+            except Exception:
+                # If file is corrupted, we'll recreate it
+                existing_columns = []
+        
+        # Merge expected columns with existing columns
+        if existing_columns:
+            # Use union of columns to ensure compatibility
+            all_columns = list(dict.fromkeys(existing_columns + expected_columns))
+        else:
+            all_columns = expected_columns
+        
         # Reorder and add missing columns
-        for col in expected_columns:
+        for col in all_columns:
             if col not in df.columns:
                 df[col] = None
         
-        # Select only expected columns
-        df = df[[col for col in expected_columns if col in df.columns]]
+        # Select columns in the correct order
+        df = df[[col for col in all_columns if col in df.columns]]
         
-        # Append or create CSV
+        # Append or create CSV - pandas automatically handles quoting of fields with commas
         header = not self.raw_csv_path.exists()
-        df.to_csv(self.raw_csv_path, mode="a", header=header, index=False)
+        df.to_csv(self.raw_csv_path, mode="a", header=header, index=False, escapechar='\\', quoting=1)  # QUOTE_ALL
     
     def get_metrics_df(self) -> pd.DataFrame:
         """Load existing metrics from CSV."""
