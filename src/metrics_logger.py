@@ -1,14 +1,14 @@
 """Metrics logger: persists per-request metrics to CSV/SQLite."""
 
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Union
 import pandas as pd
 
 
 class MetricsLogger:
     """Handles logging and persistence of evaluation metrics."""
     
-    def __init__(self, output_dir: str | Path):
+    def __init__(self, output_dir: Union[str, Path]):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.raw_csv_path = self.output_dir / "raw_metrics.csv"
@@ -57,7 +57,7 @@ class MetricsLogger:
         return pd.read_csv(self.raw_csv_path)
 
 
-def append_metrics_csv(df: pd.DataFrame, out_csv: str | Path) -> None:
+def append_metrics_csv(df: pd.DataFrame, out_csv: Union[str, Path]) -> None:
     """Append metrics DataFrame to CSV file."""
     out_path = Path(out_csv)
     out_path.parent.mkdir(parents=True, exist_ok=True)
