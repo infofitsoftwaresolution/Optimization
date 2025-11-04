@@ -251,17 +251,26 @@ def _extract_questions_from_text(text: str) -> str:
             # Look for opening bracket
             bracket_start = after_marker.find('[')
             if bracket_start >= 0:
-                # Find matching closing bracket (handle nested brackets)
+                # Find matching closing bracket (handle nested brackets and CSV double quotes)
                 bracket_count = 0
                 bracket_end = -1
                 in_string = False
                 escape_next = False
+                # Track if we're in a CSV double-quote sequence (""")
+                csv_double_quote = False
                 
                 for i in range(bracket_start, len(after_marker)):
                     char = after_marker[i]
                     
                     if escape_next:
                         escape_next = False
+                        continue
+                    
+                    # Check for CSV double quotes (""")
+                    if i + 1 < len(after_marker) and char == '"' and after_marker[i+1] == '"':
+                        # This is a CSV double quote - toggle string state
+                        in_string = not in_string
+                        i += 1  # Skip next quote
                         continue
                     
                     if char == '\\':
