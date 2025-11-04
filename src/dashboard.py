@@ -533,6 +533,7 @@ with st.sidebar:
                     # First, convert NDJSON to CSV format, then extract questions
                     lines = file_content.strip().split('\n')
                     is_ndjson = len(lines) > 1
+                    ndjson_processed = False
                     
                     if is_ndjson:
                         # Try to parse first line as JSON to check if it's NDJSON format
@@ -683,13 +684,15 @@ with st.sidebar:
                                     st.error("❌ Could not extract prompts from NDJSON file")
                                     st.session_state.uploaded_prompts = []
                                 
-                                # Skip the regular JSON processing for NDJSON files
-                                continue
+                                # Mark that NDJSON was processed
+                                ndjson_processed = True
                         except (json.JSONDecodeError, ValueError, KeyError):
                             # Not NDJSON or error parsing, continue with regular JSON processing
                             pass
                     
-                    # Try to parse as regular JSON first
+                    # Only process as regular JSON if NDJSON was not processed
+                    if not ndjson_processed:
+                        # Try to parse as regular JSON first
                     data = None
                     json_error = None
                     
