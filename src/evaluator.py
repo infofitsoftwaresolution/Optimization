@@ -103,11 +103,14 @@ class BedrockEvaluator:
             metrics["response"] = response_text  # Store full response
             
             # Always validate JSON to provide useful information
-            # Set json_valid based on whether JSON was expected and the actual validation result
-            is_valid, _ = is_valid_json(response_text)
+            # Try to extract/clean JSON from response (handles markdown code blocks, etc.)
+            is_valid, cleaned_json = self._validate_json_with_cleaning(response_text)
             if expected_json:
                 # If JSON was expected, use the validation result directly
                 metrics["json_valid"] = is_valid
+                # Store cleaned JSON if available for better display
+                if is_valid and cleaned_json:
+                    metrics["cleaned_response"] = cleaned_json
             else:
                 # If JSON wasn't expected, always validate but use None to indicate "not applicable"
                 # This way we still show useful info (if response happens to be valid JSON)
@@ -544,3 +547,98 @@ class BedrockEvaluator:
                 all_metrics.append(metrics)
         
         return all_metrics
+    
+    def _validate_json_with_cleaning(self, text: str) -> Tuple[bool, Optional[str]]:
+        """
+        Validate JSON with cleaning/extraction logic.
+        Handles markdown code blocks, wrapped JSON, etc.
+        
+        Returns:
+            Tuple of (is_valid, cleaned_json_text)
+        """
+        if not text or not text.strip():
+            return False, None
+        
+        import re
+        
+        # First try direct validation
+        try:
+            json.loads(text.strip())
+            return True, text.strip()
+        except (json.JSONDecodeError, TypeError):
+            pass
+        
+        # Try to extract JSON from markdown code blocks
+        # Pattern: ```json ... ``` or ``` ... ```
+        json_block_patterns = [
+            r'```json\s*\n(.*?)\n```',
+            r'```\s*\n(.*?)\n```',
+            r'```json\s*(.*?)\s*```',
+            r'```\s*(.*?)\s*```',
+        ]
+        
+        for pattern in json_block_patterns:
+            matches = re.findall(pattern, text, re.DOTALL)
+            for match in matches:
+                try:
+                    cleaned = match.strip()
+                    json.loads(cleaned)
+                    return True, cleaned
+                except (json.JSONDecodeError, TypeError):
+                    continue
+        
+        # Try to find JSON object/array in the text
+        # Look for balanced brackets
+        text_clean = text.strip()
+        
+        # Find first { or [
+        for start_char, end_char in [('{', '}'), ('[', ']')]:
+            start_idx = text_clean.find(start_char)
+            if start_idx >= 0:
+                # Find matching closing bracket
+                bracket_count = 0
+                in_string = False
+                escape_next = False
+                
+                for i in range(start_idx, len(text_clean)):
+                    char = text_clean[i]
+                    
+                    if escape_next:
+                        escape_next = False
+                        continue
+                    
+                    if char == '\\':
+                        escape_next = True
+                        continue
+                    
+                    if char == '"' and not escape_next:
+                        in_string = not in_string
+                        continue
+                    
+                    if not in_string:
+                        if char == start_char:
+                            bracket_count += 1
+                        elif char == end_char:
+                            bracket_count -= 1
+                            if bracket_count == 0:
+                                # Found matching bracket
+                                json_candidate = text_clean[start_idx:i+1]
+                                try:
+                                    json.loads(json_candidate)
+                                    return True, json_candidate
+                                except (json.JSONDecodeError, TypeError):
+                                    break
+                
+                # If we found a start but no match, try to extract anyway
+                if bracket_count > 0:
+                    # Try to find a reasonable end point
+                    end_idx = text_clean.rfind(end_char)
+                    if end_idx > start_idx:
+                        json_candidate = text_clean[start_idx:end_idx+1]
+                        try:
+                            json.loads(json_candidate)
+                            return True, json_candidate
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+        
+        return False, None
