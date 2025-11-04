@@ -158,60 +158,133 @@ def _extract_questions_from_text(text: str) -> str:
     if not isinstance(text, str):
         return ""
     
-    # Look for "Questions:" section
+    # Look for "Questions:" section (case-insensitive)
     questions_marker = "Questions:"
-    if questions_marker in text:
-        # Find the start of the questions array
-        start_idx = text.find(questions_marker)
+    questions_marker_lower = questions_marker.lower()
+    text_lower = text.lower()
+    
+    if questions_marker_lower in text_lower:
+        # Find the start of the questions array (case-insensitive search)
+        start_idx = text_lower.find(questions_marker_lower)
         if start_idx >= 0:
-            # Find the JSON array starting after "Questions:"
+            # Find the actual marker in original text (preserve case)
+            actual_marker = text[start_idx:start_idx + len(questions_marker)]
             after_marker = text[start_idx + len(questions_marker):].strip()
             
             # Try to find the JSON array
             # Look for opening bracket
             bracket_start = after_marker.find('[')
             if bracket_start >= 0:
-                # Find matching closing bracket
+                # Find matching closing bracket (handle nested brackets)
                 bracket_count = 0
                 bracket_end = -1
+                in_string = False
+                escape_next = False
+                
                 for i in range(bracket_start, len(after_marker)):
-                    if after_marker[i] == '[':
-                        bracket_count += 1
-                    elif after_marker[i] == ']':
-                        bracket_count -= 1
-                        if bracket_count == 0:
-                            bracket_end = i + 1
-                            break
+                    char = after_marker[i]
+                    
+                    if escape_next:
+                        escape_next = False
+                        continue
+                    
+                    if char == '\\':
+                        escape_next = True
+                        continue
+                    
+                    if char == '"' and not escape_next:
+                        in_string = not in_string
+                        continue
+                    
+                    if not in_string:
+                        if char == '[':
+                            bracket_count += 1
+                        elif char == ']':
+                            bracket_count -= 1
+                            if bracket_count == 0:
+                                bracket_end = i + 1
+                                break
                 
                 if bracket_end > 0:
-                    # Extract the JSON array
+                    # Extract the JSON array string
                     json_array_str = after_marker[bracket_start:bracket_end]
+                    
+                    # Try to parse the JSON array
+                    # First, try direct parsing
                     try:
-                        # Parse the JSON array
                         questions_array = json.loads(json_array_str)
-                        if isinstance(questions_array, list):
-                            # Extract question text from each item
+                        if isinstance(questions_array, list) and len(questions_array) > 0:
+                            return _format_questions_from_array(questions_array)
+                    except (json.JSONDecodeError, ValueError) as e:
+                        # If direct parsing fails, try to handle escaped quotes
+                        # The JSON might have escaped quotes like \" which need to be handled
+                        try:
+                            # Try replacing escaped quotes patterns
+                            json_array_fixed = json_array_str.replace('\\"', '"').replace('""', '"')
+                            questions_array = json.loads(json_array_fixed)
+                            if isinstance(questions_array, list) and len(questions_array) > 0:
+                                return _format_questions_from_array(questions_array)
+                        except (json.JSONDecodeError, ValueError):
+                            # If that fails, try to extract manually using regex-like approach
+                            # Find all Question fields manually
+                            import re
+                            # Look for patterns like "Question":"..." or 'Question':'...'
+                            question_patterns = [
+                                r'"Question"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"',
+                                r"'Question'\s*:\s*'([^'\\]*(?:\\.[^'\\]*)*)'",
+                                r'"question"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"',
+                                r"'question'\s*:\s*'([^'\\]*(?:\\.[^'\\]*)*)'",
+                            ]
+                            
                             question_texts = []
-                            for q_item in questions_array:
-                                if isinstance(q_item, dict):
-                                    # Try different field names for question
-                                    question = (q_item.get('Question') or 
-                                               q_item.get('question') or 
-                                               q_item.get('text') or 
-                                               q_item.get('prompt') or
-                                               str(q_item))
-                                    if question and isinstance(question, str) and len(question.strip()) > 0:
-                                        question_texts.append(question.strip())
-                                elif isinstance(q_item, str):
-                                    question_texts.append(q_item.strip())
+                            for pattern in question_patterns:
+                                matches = re.findall(pattern, json_array_str)
+                                for match in matches:
+                                    # Unescape the matched string
+                                    unescaped = match.replace('\\"', '"').replace('\\n', '\n').replace('\\t', '\t')
+                                    if unescaped.strip():
+                                        question_texts.append(unescaped.strip())
                             
                             if question_texts:
-                                # Return formatted questions
                                 return "\n\n".join([f"Q{i+1}: {q}" for i, q in enumerate(question_texts)])
-                    except (json.JSONDecodeError, ValueError):
-                        pass
     
     # If no questions found, return empty string
+    return ""
+
+
+def _format_questions_from_array(questions_array: list) -> str:
+    """Format questions from a parsed JSON array."""
+    question_texts = []
+    for q_item in questions_array:
+        if isinstance(q_item, dict):
+            # Try different field names for question (case-insensitive)
+            question = None
+            for key in ['Question', 'question', 'QuestionText', 'questionText', 'text', 'Text', 'prompt', 'Prompt']:
+                if key in q_item:
+                    val = q_item[key]
+                    if isinstance(val, str) and len(val.strip()) > 0:
+                        question = val.strip()
+                        break
+            
+            if not question:
+                # Try to find any string value that looks like a question
+                for key, val in q_item.items():
+                    if isinstance(val, str) and len(val.strip()) > 10:
+                        # Skip LinkId and other non-question fields
+                        if key.lower() not in ['linkid', 'link_id', 'id', 'link', 'questionid']:
+                            question = val.strip()
+                            break
+            
+            if question:
+                question_texts.append(question)
+        elif isinstance(q_item, str):
+            if q_item.strip():
+                question_texts.append(q_item.strip())
+    
+    if question_texts:
+        # Return formatted questions
+        return "\n\n".join([f"Q{i+1}: {q}" for i, q in enumerate(question_texts)])
+    
     return ""
 
 # Page configuration
