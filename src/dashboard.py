@@ -693,56 +693,56 @@ with st.sidebar:
                     # Only process as regular JSON if NDJSON was not processed
                     if not ndjson_processed:
                         # Try to parse as regular JSON first
-                    data = None
-                    json_error = None
-                    
-                    try:
-                        # Try parsing as single JSON object/array
-                        is_valid, parsed = is_valid_json(file_content)
-                        if is_valid:
-                            data = parsed
-                    except Exception as e:
-                        json_error = str(e)
-                    
-                    # If JSON parsing failed or has "Extra data" error, try JSONL format
-                    if data is None or (json_error and "Extra data" in json_error):
-                        # Try parsing as JSONL (one JSON object per line)
+                        data = None
+                        json_error = None
+                        
                         try:
-                            lines = file_content.strip().split('\n')
-                            jsonl_objects = []
-                            for line_num, line in enumerate(lines, 1):
-                                line = line.strip()
-                                if not line:
-                                    continue
-                                
-                                is_valid, parsed = is_valid_json(line)
-                                if is_valid:
-                                    jsonl_objects.append(parsed)
-                                else:
-                                    # If one line fails, might not be JSONL
-                                    break
-                            
-                            # If we successfully parsed multiple lines as JSON, it's JSONL
-                            if len(jsonl_objects) > 0:
-                                data = jsonl_objects
-                            elif data is None:
-                                # If JSONL also failed, try to parse just the first valid JSON object
-                                # This handles cases where there's extra data after the main JSON
-                                try:
-                                    # Find the first complete JSON object
-                                    first_obj_end = file_content.find('\n')
-                                    if first_obj_end > 0:
-                                        first_line = file_content[:first_obj_end].strip()
-                                        is_valid, parsed = is_valid_json(first_line)
-                                        if is_valid:
-                                            data = [parsed]  # Wrap in list for consistency
-                                except:
-                                    pass
+                            # Try parsing as single JSON object/array
+                            is_valid, parsed = is_valid_json(file_content)
+                            if is_valid:
+                                data = parsed
                         except Exception as e:
-                            pass
-                    
-                    # If still no data, show error
-                    if data is None:
+                            json_error = str(e)
+                        
+                        # If JSON parsing failed or has "Extra data" error, try JSONL format
+                        if data is None or (json_error and "Extra data" in json_error):
+                            # Try parsing as JSONL (one JSON object per line)
+                            try:
+                                lines = file_content.strip().split('\n')
+                                jsonl_objects = []
+                                for line_num, line in enumerate(lines, 1):
+                                    line = line.strip()
+                                    if not line:
+                                        continue
+                                    
+                                    is_valid, parsed = is_valid_json(line)
+                                    if is_valid:
+                                        jsonl_objects.append(parsed)
+                                    else:
+                                        # If one line fails, might not be JSONL
+                                        break
+                                
+                                # If we successfully parsed multiple lines as JSON, it's JSONL
+                                if len(jsonl_objects) > 0:
+                                    data = jsonl_objects
+                                elif data is None:
+                                    # If JSONL also failed, try to parse just the first valid JSON object
+                                    # This handles cases where there's extra data after the main JSON
+                                    try:
+                                        # Find the first complete JSON object
+                                        first_obj_end = file_content.find('\n')
+                                        if first_obj_end > 0:
+                                            first_line = file_content[:first_obj_end].strip()
+                                            is_valid, parsed = is_valid_json(first_line)
+                                            if is_valid:
+                                                data = [parsed]  # Wrap in list for consistency
+                                    except:
+                                        pass
+                            except Exception as e:
+                                pass
+                        
+                        # If still no data, show error
+                        if data is None:
                         st.error(f"❌ Error parsing JSON file: {json_error or 'Invalid JSON format. Please ensure the file is valid JSON or JSONL format.'}")
                         st.session_state.uploaded_prompts = []
                     else:
