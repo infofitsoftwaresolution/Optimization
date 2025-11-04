@@ -30,11 +30,87 @@ import tempfile
 import os
 
 
+def extract_full_prompt_text(item: dict) -> str:
+    """
+    Extract the FULL prompt text (all user messages combined) from JSON structures.
+    This is used for CSV conversion - it returns the complete text without extracting questions.
+    """
+    if not isinstance(item, dict):
+        return str(item) if item else ""
+    
+    # Handle Bedrock CloudTrail format: input.inputBodyJson.messages[].content[].text
+    if 'input' in item:
+        input_data = item['input']
+        if isinstance(input_data, dict):
+            # Check for inputBodyJson
+            if 'inputBodyJson' in input_data:
+                input_body = input_data['inputBodyJson']
+                if isinstance(input_body, dict) and 'messages' in input_body:
+                    messages = input_body['messages']
+                    if isinstance(messages, list):
+                        # Combine all user messages
+                        user_messages = []
+                        for msg in messages:
+                            if isinstance(msg, dict) and msg.get('role') == 'user':
+                                content = msg.get('content', [])
+                                if isinstance(content, list):
+                                    for content_item in content:
+                                        if isinstance(content_item, dict) and 'text' in content_item:
+                                            text = content_item['text']
+                                            if isinstance(text, str) and text.strip():
+                                                user_messages.append(text.strip())
+                                        elif isinstance(content_item, str) and content_item.strip():
+                                            user_messages.append(content_item.strip())
+                                elif isinstance(content, str) and content.strip():
+                                    user_messages.append(content.strip())
+                        
+                        if user_messages:
+                            # Return ALL user messages combined (this is the full prompt)
+                            return "\n\n".join(user_messages)
+            
+            # Check for direct messages array
+            if 'messages' in input_data:
+                messages = input_data['messages']
+                if isinstance(messages, list):
+                    user_messages = []
+                    for msg in messages:
+                        if isinstance(msg, dict) and msg.get('role') == 'user':
+                            content = msg.get('content', [])
+                            if isinstance(content, list):
+                                for content_item in content:
+                                    if isinstance(content_item, dict) and 'text' in content_item:
+                                        text = content_item['text']
+                                        if isinstance(text, str) and text.strip():
+                                            user_messages.append(text.strip())
+                                    elif isinstance(content_item, str) and content_item.strip():
+                                        user_messages.append(content_item.strip())
+                            elif isinstance(content, str) and content.strip():
+                                user_messages.append(content.strip())
+                    
+                    if user_messages:
+                        return "\n\n".join(user_messages)
+    
+    # Try direct prompt fields
+    for field in ['prompt', 'input', 'text', 'question', 'query', 'message']:
+        if field in item:
+            value = item[field]
+            if isinstance(value, str) and len(value.strip()) > 0:
+                return value.strip()
+            elif isinstance(value, dict):
+                # Recursively search in nested dict
+                nested = extract_full_prompt_text(value)
+                if nested:
+                    return nested
+    
+    return ""
+
+
 def extract_prompt_from_json_item(item: dict) -> str:
     """
     Extract prompt text from various JSON structures.
     Handles Bedrock CloudTrail format and other common formats.
     Specifically handles NDJSON files with questions in messages.
+    This version tries to extract individual questions if found.
     """
     if not isinstance(item, dict):
         return str(item) if item else ""
@@ -642,8 +718,9 @@ with st.sidebar:
                                         if not isinstance(record, dict):
                                             continue
                                         
-                                        # Extract prompt text using the extraction function
-                                        extracted_prompt = extract_prompt_from_json_item(record)
+                                        # Extract FULL prompt text (all user messages combined) for CSV conversion
+                                        # Use extract_full_prompt_text to get the complete text, not just questions
+                                        extracted_prompt = extract_full_prompt_text(record)
                                         if not extracted_prompt:
                                             continue
                                         
