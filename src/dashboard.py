@@ -285,16 +285,26 @@ with st.sidebar:
                             # Show checkboxes for each prompt
                             selected_prompts = []
                             for idx, prompt in enumerate(st.session_state.uploaded_prompts):
-                                # Truncate prompt for display (show first 100 chars)
-                                prompt_preview = str(prompt)[:100] + "..." if len(str(prompt)) > 100 else str(prompt)
-                                prompt_preview = prompt_preview.replace('\n', ' ').replace('\r', ' ')
+                                # Create a readable preview of the prompt (show first 200 chars)
+                                prompt_text = str(prompt).strip()
+                                if len(prompt_text) > 200:
+                                    prompt_preview = prompt_text[:200] + "..."
+                                else:
+                                    prompt_preview = prompt_text
                                 
-                                # Checkbox for each prompt
+                                # Clean up the preview for display (remove extra whitespace, newlines)
+                                prompt_preview = ' '.join(prompt_preview.split())
+                                
+                                # If prompt is empty or very short, show a default message
+                                if not prompt_preview or len(prompt_preview.strip()) < 5:
+                                    prompt_preview = f"[Empty prompt {idx + 1}]"
+                                
+                                # Checkbox for each prompt - show the actual prompt text
                                 is_selected = st.checkbox(
-                                    f"Prompt {idx + 1}: {prompt_preview}",
+                                    f"**Prompt {idx + 1}:** {prompt_preview}",
                                     value=prompt in st.session_state.selected_uploaded_prompts,
                                     key=f"csv_prompt_checkbox_{idx}",
-                                    help=f"Click to select/deselect this prompt"
+                                    help=f"Full prompt: {prompt_text[:500] if len(prompt_text) > 500 else prompt_text}"
                                 )
                                 
                                 if is_selected:
@@ -458,16 +468,26 @@ with st.sidebar:
                                 # Show checkboxes for each prompt
                                 selected_prompts = []
                                 for idx, prompt in enumerate(st.session_state.uploaded_prompts):
-                                    # Truncate prompt for display (show first 100 chars)
-                                    prompt_preview = prompt[:100] + "..." if len(prompt) > 100 else prompt
-                                    prompt_preview = prompt_preview.replace('\n', ' ').replace('\r', ' ')
+                                    # Create a readable preview of the prompt (show first 200 chars)
+                                    prompt_text = str(prompt).strip()
+                                    if len(prompt_text) > 200:
+                                        prompt_preview = prompt_text[:200] + "..."
+                                    else:
+                                        prompt_preview = prompt_text
                                     
-                                    # Checkbox for each prompt
+                                    # Clean up the preview for display (remove extra whitespace, newlines)
+                                    prompt_preview = ' '.join(prompt_preview.split())
+                                    
+                                    # If prompt is empty or very short, show a default message
+                                    if not prompt_preview or len(prompt_preview.strip()) < 5:
+                                        prompt_preview = f"[Empty prompt {idx + 1}]"
+                                    
+                                    # Checkbox for each prompt - show the actual prompt text
                                     is_selected = st.checkbox(
-                                        f"Prompt {idx + 1}: {prompt_preview}",
+                                        f"**Prompt {idx + 1}:** {prompt_preview}",
                                         value=prompt in st.session_state.selected_uploaded_prompts,
                                         key=f"prompt_checkbox_{idx}",
-                                        help=f"Click to select/deselect this prompt"
+                                        help=f"Full prompt: {prompt_text[:500] if len(prompt_text) > 500 else prompt_text}"
                                     )
                                     
                                     if is_selected:
