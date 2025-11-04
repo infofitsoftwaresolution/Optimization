@@ -305,25 +305,38 @@ def _extract_questions_from_text(text: str) -> str:
                             import re
                             # Look for patterns like "Question":"..." or 'Question':'...'
                             # Handle both single and double quotes, and CSV double-escaped quotes
-                            question_patterns = [
-                                r'""Question""\s*:\s*""([^"]*(?:""[^"]*)*)""',  # CSV format: ""Question"":""...""
-                                r'"Question"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"',   # Standard: "Question":"..."
-                                r"'Question'\s*:\s*'([^'\\]*(?:\\.[^'\\]*)*)'",   # Single quotes
-                                r'"question"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"',   # Lowercase
-                                r"'question'\s*:\s*'([^'\\]*(?:\\.[^'\\]*)*)'",   # Lowercase single quotes
-                            ]
                             
+                            # First, try to handle CSV format with double quotes: ""Question"":""...""
+                            # We need to match the entire JSON object and extract the Question field
                             question_texts = []
-                            for pattern in question_patterns:
-                                matches = re.findall(pattern, json_array_str)
-                                for match in matches:
-                                    # Unescape the matched string
-                                    # Handle CSV double quotes first
-                                    unescaped = match.replace('""', '"')
-                                    # Then handle JSON escape sequences
-                                    unescaped = unescaped.replace('\\"', '"').replace('\\n', '\n').replace('\\t', '\t').replace('\\\\', '\\')
-                                    if unescaped.strip():
-                                        question_texts.append(unescaped.strip())
+                            
+                            # Pattern for CSV format: ""Question"":""...""
+                            # Match: ""Question"":"" followed by question text (which may contain escaped quotes) followed by ""
+                            csv_pattern = r'""Question""\s*:\s*""((?:[^"]|""|\\"")*)""'
+                            csv_matches = re.findall(csv_pattern, json_array_str)
+                            for match in csv_matches:
+                                # Unescape: "" becomes ", \" becomes "
+                                unescaped = match.replace('""', '"').replace('\\""', '"').replace('\\"', '"')
+                                unescaped = unescaped.replace('\\n', '\n').replace('\\t', '\t').replace('\\\\', '\\')
+                                if unescaped.strip():
+                                    question_texts.append(unescaped.strip())
+                            
+                            # If no CSV matches, try standard JSON format
+                            if not question_texts:
+                                question_patterns = [
+                                    r'"Question"\s*:\s*"((?:[^"\\]|\\.)*)"',   # Standard: "Question":"..."
+                                    r"'Question'\s*:\s*'((?:[^'\\]|\\.)*)'",   # Single quotes
+                                    r'"question"\s*:\s*"((?:[^"\\]|\\.)*)"',   # Lowercase
+                                    r"'question'\s*:\s*'((?:[^'\\]|\\.)*)'",   # Lowercase single quotes
+                                ]
+                                
+                                for pattern in question_patterns:
+                                    matches = re.findall(pattern, json_array_str)
+                                    for match in matches:
+                                        # Unescape the matched string
+                                        unescaped = match.replace('\\"', '"').replace('\\n', '\n').replace('\\t', '\t').replace('\\\\', '\\')
+                                        if unescaped.strip():
+                                            question_texts.append(unescaped.strip())
                             
                             # Remove duplicates while preserving order
                             seen = set()
