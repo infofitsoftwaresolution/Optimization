@@ -529,6 +529,166 @@ with st.sidebar:
                     if isinstance(file_content, bytes):
                         file_content = file_content.decode('utf-8')
                     
+                    # Check if this is NDJSON format (one JSON object per line)
+                    # First, convert NDJSON to CSV format, then extract questions
+                    lines = file_content.strip().split('\n')
+                    is_ndjson = len(lines) > 1
+                    
+                    if is_ndjson:
+                        # Try to parse first line as JSON to check if it's NDJSON format
+                        try:
+                            first_line_json = json.loads(lines[0].strip())
+                            if isinstance(first_line_json, dict) and 'input' in first_line_json:
+                                # This looks like NDJSON format - convert to CSV first
+                                st.info("🔄 Detected NDJSON format. Converting to CSV format...")
+                                
+                                # Convert NDJSON to CSV format
+                                csv_prompts = []
+                                prompt_id = 1
+                                
+                                for line_num, line in enumerate(lines, 1):
+                                    line = line.strip()
+                                    if not line:
+                                        continue
+                                    
+                                    try:
+                                        record = json.loads(line)
+                                        if not isinstance(record, dict):
+                                            continue
+                                        
+                                        # Extract prompt text using the extraction function
+                                        extracted_prompt = extract_prompt_from_json_item(record)
+                                        if not extracted_prompt:
+                                            continue
+                                        
+                                        # Detect if JSON is expected
+                                        expected_json = (
+                                            "json" in extracted_prompt.lower() or
+                                            "return the result in a json" in extracted_prompt.lower() or
+                                            "formatted as follows:" in extracted_prompt.lower()
+                                        )
+                                        
+                                        # Extract category
+                                        category = "json-gen" if expected_json else "general"
+                                        operation = record.get("operation", "")
+                                        if operation:
+                                            category = operation.lower()
+                                        
+                                        csv_prompts.append({
+                                            "prompt_id": prompt_id,
+                                            "prompt": extracted_prompt,
+                                            "expected_json": expected_json,
+                                            "category": category
+                                        })
+                                        prompt_id += 1
+                                    except json.JSONDecodeError:
+                                        continue
+                                
+                                if csv_prompts:
+                                    # Now extract individual questions from each CSV prompt
+                                    st.success(f"✅ Converted {len(csv_prompts)} NDJSON records to CSV format")
+                                    all_questions = []
+                                    
+                                    for csv_prompt in csv_prompts:
+                                        prompt_text = csv_prompt["prompt"]
+                                        # Extract questions from the "Questions:" section
+                                        questions_text = _extract_questions_from_text(prompt_text)
+                                        if questions_text:
+                                            # Split into individual questions
+                                            if "\n\nQ" in questions_text:
+                                                question_parts = questions_text.split("\n\nQ")
+                                                for i, part in enumerate(question_parts):
+                                                    if part.strip():
+                                                        if i == 0 and not part.startswith("Q"):
+                                                            all_questions.append(part.strip())
+                                                        else:
+                                                            all_questions.append(f"Q{part.strip()}")
+                                            else:
+                                                all_questions.append(questions_text)
+                                    
+                                    if all_questions:
+                                        st.session_state.uploaded_prompts = all_questions
+                                        st.success(f"✅ Extracted {len(all_questions)} individual questions from CSV prompts")
+                                        
+                                        # Initialize selected prompts if not exists
+                                        if 'selected_uploaded_prompts' not in st.session_state:
+                                            st.session_state.selected_uploaded_prompts = all_questions.copy()
+                                        
+                                        # Show checkbox list for prompt selection
+                                        with st.expander("📋 Select Prompts to Test", expanded=True):
+                                            st.markdown(f"**Total prompts loaded:** {len(all_questions)}")
+                                            
+                                            # Select all / Deselect all buttons (stacked vertically)
+                                            if st.button("✅ Select All", key="select_all_ndjson", use_container_width=True):
+                                                st.session_state.selected_uploaded_prompts = all_questions.copy()
+                                                st.rerun()
+                                            if st.button("❌ Deselect All", key="deselect_all_ndjson", use_container_width=True):
+                                                st.session_state.selected_uploaded_prompts = []
+                                                st.rerun()
+                                            
+                                            st.markdown("---")
+                                            
+                                            # Show checkboxes for each question
+                                            selected_prompts = []
+                                            for idx, question in enumerate(all_questions):
+                                                question_text = str(question).strip()
+                                                # Remove "Q1:", "Q2:" prefix if present for cleaner display
+                                                if question_text.startswith("Q") and ":" in question_text:
+                                                    display_text = question_text.split(":", 1)[1].strip()
+                                                else:
+                                                    display_text = question_text
+                                                
+                                                if len(display_text) > 200:
+                                                    prompt_preview = display_text[:200] + "..."
+                                                else:
+                                                    prompt_preview = display_text
+                                                
+                                                prompt_preview = ' '.join(prompt_preview.split())
+                                                
+                                                if not prompt_preview or len(prompt_preview.strip()) < 5:
+                                                    prompt_preview = f"[Empty prompt {idx + 1}]"
+                                                
+                                                is_selected = st.checkbox(
+                                                    f"**Prompt {idx + 1}:** {prompt_preview}",
+                                                    value=question in st.session_state.selected_uploaded_prompts,
+                                                    key=f"ndjson_prompt_checkbox_{idx}",
+                                                    help=f"Full prompt: {question_text[:500] if len(question_text) > 500 else question_text}"
+                                                )
+                                                
+                                                if is_selected:
+                                                    selected_prompts.append(question)
+                                            
+                                            st.session_state.selected_uploaded_prompts = selected_prompts
+                                            
+                                            st.markdown("---")
+                                            st.info(f"**Selected:** {len(selected_prompts)} / {len(all_questions)} prompts")
+                                            if len(selected_prompts) > 0 and len(selected_prompts) <= 5:
+                                                st.caption("**Selected prompts:**")
+                                                for i, prompt in enumerate(selected_prompts, 1):
+                                                    preview = str(prompt).strip()[:100] + "..." if len(str(prompt)) > 100 else str(prompt)
+                                                    st.caption(f"{i}. {preview}")
+                                            elif len(selected_prompts) > 5:
+                                                st.caption("**First 5 selected prompts:**")
+                                                for i, prompt in enumerate(selected_prompts[:5], 1):
+                                                    preview = str(prompt).strip()[:100] + "..." if len(str(prompt)) > 100 else str(prompt)
+                                                    st.caption(f"{i}. {preview}")
+                                                st.caption(f"... and {len(selected_prompts) - 5} more prompts")
+                                    else:
+                                        st.warning("⚠️ No questions found in the converted CSV prompts. Displaying full prompts instead.")
+                                        # Fall back to showing full prompts
+                                        st.session_state.uploaded_prompts = [p["prompt"] for p in csv_prompts]
+                                        if 'selected_uploaded_prompts' not in st.session_state:
+                                            st.session_state.selected_uploaded_prompts = st.session_state.uploaded_prompts.copy()
+                                else:
+                                    st.error("❌ Could not extract prompts from NDJSON file")
+                                    st.session_state.uploaded_prompts = []
+                                
+                                # Skip the regular JSON processing for NDJSON files
+                                continue
+                        except (json.JSONDecodeError, ValueError, KeyError):
+                            # Not NDJSON or error parsing, continue with regular JSON processing
+                            pass
+                    
                     # Try to parse as regular JSON first
                     data = None
                     json_error = None
