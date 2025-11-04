@@ -26,6 +26,8 @@ from src.evaluator import BedrockEvaluator
 from src.metrics_logger import MetricsLogger
 from src.report_generator import ReportGenerator
 from src.utils.json_utils import is_valid_json
+import tempfile
+import os
 
 
 def extract_prompt_from_json_item(item: dict) -> str:
