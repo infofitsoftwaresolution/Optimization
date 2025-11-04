@@ -217,23 +217,24 @@ def _extract_questions_from_text(text: str) -> str:
                             return _format_questions_from_array(questions_array)
                     except (json.JSONDecodeError, ValueError) as e:
                         # If direct parsing fails, try to handle escaped quotes
-                        # The JSON might have escaped quotes like \" which need to be handled
+                        # The JSON might have escaped quotes like \" or CSV double quotes like ""
                         try:
-                            # Try replacing escaped quotes patterns
-                            json_array_fixed = json_array_str.replace('\\"', '"').replace('""', '"')
+                            # Handle CSV-style double quotes ("" becomes ")
+                            json_array_fixed = json_array_str.replace('""', '"')
                             questions_array = json.loads(json_array_fixed)
                             if isinstance(questions_array, list) and len(questions_array) > 0:
                                 return _format_questions_from_array(questions_array)
                         except (json.JSONDecodeError, ValueError):
-                            # If that fails, try to extract manually using regex-like approach
-                            # Find all Question fields manually
+                            # If that fails, try to extract manually using regex
                             import re
                             # Look for patterns like "Question":"..." or 'Question':'...'
+                            # Handle both single and double quotes, and CSV double-escaped quotes
                             question_patterns = [
-                                r'"Question"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"',
-                                r"'Question'\s*:\s*'([^'\\]*(?:\\.[^'\\]*)*)'",
-                                r'"question"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"',
-                                r"'question'\s*:\s*'([^'\\]*(?:\\.[^'\\]*)*)'",
+                                r'""Question""\s*:\s*""([^"]*(?:""[^"]*)*)""',  # CSV format: ""Question"":""...""
+                                r'"Question"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"',   # Standard: "Question":"..."
+                                r"'Question'\s*:\s*'([^'\\]*(?:\\.[^'\\]*)*)'",   # Single quotes
+                                r'"question"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"',   # Lowercase
+                                r"'question'\s*:\s*'([^'\\]*(?:\\.[^'\\]*)*)'",   # Lowercase single quotes
                             ]
                             
                             question_texts = []
@@ -241,12 +242,23 @@ def _extract_questions_from_text(text: str) -> str:
                                 matches = re.findall(pattern, json_array_str)
                                 for match in matches:
                                     # Unescape the matched string
-                                    unescaped = match.replace('\\"', '"').replace('\\n', '\n').replace('\\t', '\t')
+                                    # Handle CSV double quotes first
+                                    unescaped = match.replace('""', '"')
+                                    # Then handle JSON escape sequences
+                                    unescaped = unescaped.replace('\\"', '"').replace('\\n', '\n').replace('\\t', '\t').replace('\\\\', '\\')
                                     if unescaped.strip():
                                         question_texts.append(unescaped.strip())
                             
-                            if question_texts:
-                                return "\n\n".join([f"Q{i+1}: {q}" for i, q in enumerate(question_texts)])
+                            # Remove duplicates while preserving order
+                            seen = set()
+                            unique_questions = []
+                            for q in question_texts:
+                                if q not in seen:
+                                    seen.add(q)
+                                    unique_questions.append(q)
+                            
+                            if unique_questions:
+                                return "\n\n".join([f"Q{i+1}: {q}" for i, q in enumerate(unique_questions)])
     
     # If no questions found, return empty string
     return ""
