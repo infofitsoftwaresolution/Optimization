@@ -628,7 +628,10 @@ with st.sidebar:
                                         elif isinstance(item, str):
                                             prompts.append(item)
                                 else:
-                                    extracted = extract_prompt_from_json_item(prompt_list) if isinstance(prompt_list, dict) else str(prompt_list)
+                                    if isinstance(prompt_list, dict):
+                                        extracted = extract_prompt_from_json_item(prompt_list)
+                                    else:
+                                        extracted = str(prompt_list)
                                     if extracted:
                                         add_prompts_with_splitting(extracted)
                             else:
