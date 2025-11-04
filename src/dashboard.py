@@ -817,70 +817,70 @@ with st.sidebar:
                                 # Initialize selected prompts if not exists
                                 if 'selected_uploaded_prompts' not in st.session_state:
                                     st.session_state.selected_uploaded_prompts = st.session_state.uploaded_prompts.copy()
-                            
-                            # Show checkbox list for prompt selection
-                            with st.expander("📋 Select Prompts to Test", expanded=True):
-                                st.markdown(f"**Total prompts loaded:** {len(st.session_state.uploaded_prompts)}")
                                 
-                                # Select all / Deselect all buttons (stacked vertically)
-                                if st.button("✅ Select All", key="select_all_uploaded", use_container_width=True):
-                                    st.session_state.selected_uploaded_prompts = st.session_state.uploaded_prompts.copy()
-                                    st.rerun()
-                                if st.button("❌ Deselect All", key="deselect_all_uploaded", use_container_width=True):
-                                    st.session_state.selected_uploaded_prompts = []
-                                    st.rerun()
-                                
-                                st.markdown("---")
-                                
-                                # Show checkboxes for each prompt
-                                selected_prompts = []
-                                for idx, prompt in enumerate(st.session_state.uploaded_prompts):
-                                    # Create a readable preview of the prompt (show first 200 chars)
-                                    prompt_text = str(prompt).strip()
-                                    if len(prompt_text) > 200:
-                                        prompt_preview = prompt_text[:200] + "..."
-                                    else:
-                                        prompt_preview = prompt_text
+                                # Show checkbox list for prompt selection
+                                with st.expander("📋 Select Prompts to Test", expanded=True):
+                                    st.markdown(f"**Total prompts loaded:** {len(st.session_state.uploaded_prompts)}")
                                     
-                                    # Clean up the preview for display (remove extra whitespace, newlines)
-                                    prompt_preview = ' '.join(prompt_preview.split())
+                                    # Select all / Deselect all buttons (stacked vertically)
+                                    if st.button("✅ Select All", key="select_all_uploaded", use_container_width=True):
+                                        st.session_state.selected_uploaded_prompts = st.session_state.uploaded_prompts.copy()
+                                        st.rerun()
+                                    if st.button("❌ Deselect All", key="deselect_all_uploaded", use_container_width=True):
+                                        st.session_state.selected_uploaded_prompts = []
+                                        st.rerun()
                                     
-                                    # If prompt is empty or very short, show a default message
-                                    if not prompt_preview or len(prompt_preview.strip()) < 5:
-                                        prompt_preview = f"[Empty prompt {idx + 1}]"
+                                    st.markdown("---")
                                     
-                                    # Checkbox for each prompt - show the actual prompt text
-                                    is_selected = st.checkbox(
-                                        f"**Prompt {idx + 1}:** {prompt_preview}",
-                                        value=prompt in st.session_state.selected_uploaded_prompts,
-                                        key=f"prompt_checkbox_{idx}",
-                                        help=f"Full prompt: {prompt_text[:500] if len(prompt_text) > 500 else prompt_text}"
-                                    )
+                                    # Show checkboxes for each prompt
+                                    selected_prompts = []
+                                    for idx, prompt in enumerate(st.session_state.uploaded_prompts):
+                                        # Create a readable preview of the prompt (show first 200 chars)
+                                        prompt_text = str(prompt).strip()
+                                        if len(prompt_text) > 200:
+                                            prompt_preview = prompt_text[:200] + "..."
+                                        else:
+                                            prompt_preview = prompt_text
+                                        
+                                        # Clean up the preview for display (remove extra whitespace, newlines)
+                                        prompt_preview = ' '.join(prompt_preview.split())
+                                        
+                                        # If prompt is empty or very short, show a default message
+                                        if not prompt_preview or len(prompt_preview.strip()) < 5:
+                                            prompt_preview = f"[Empty prompt {idx + 1}]"
+                                        
+                                        # Checkbox for each prompt - show the actual prompt text
+                                        is_selected = st.checkbox(
+                                            f"**Prompt {idx + 1}:** {prompt_preview}",
+                                            value=prompt in st.session_state.selected_uploaded_prompts,
+                                            key=f"prompt_checkbox_{idx}",
+                                            help=f"Full prompt: {prompt_text[:500] if len(prompt_text) > 500 else prompt_text}"
+                                        )
+                                        
+                                        if is_selected:
+                                            selected_prompts.append(prompt)
                                     
-                                    if is_selected:
-                                        selected_prompts.append(prompt)
-                                
-                                # Update session state
-                                st.session_state.selected_uploaded_prompts = selected_prompts
-                                
-                                st.markdown("---")
-                                st.info(f"**Selected:** {len(selected_prompts)} / {len(st.session_state.uploaded_prompts)} prompts")
-                                
-                                # Show preview of selected prompts
-                                if selected_prompts:
-                                    with st.expander("👁️ Preview Selected Prompts", expanded=False):
-                                        for idx, prompt in enumerate(selected_prompts[:5], 1):
-                                            st.markdown(f"**Prompt {idx}:**")
-                                            st.text_area(
-                                                "",
-                                                value=prompt[:500] + ("..." if len(prompt) > 500 else ""),
-                                                height=100,
-                                                key=f"preview_prompt_{idx}",
-                                                disabled=True,
-                                                label_visibility="collapsed"
-                                            )
-                                        if len(selected_prompts) > 5:
-                                            st.caption(f"... and {len(selected_prompts) - 5} more prompts")
+                                    # Update session state
+                                    st.session_state.selected_uploaded_prompts = selected_prompts
+                                    
+                                    st.markdown("---")
+                                    st.info(f"**Selected:** {len(selected_prompts)} / {len(st.session_state.uploaded_prompts)} prompts")
+                                    
+                                    # Show preview of selected prompts
+                                    if selected_prompts:
+                                        with st.expander("👁️ Preview Selected Prompts", expanded=False):
+                                            for idx, prompt in enumerate(selected_prompts[:5], 1):
+                                                st.markdown(f"**Prompt {idx}:**")
+                                                st.text_area(
+                                                    "",
+                                                    value=prompt[:500] + ("..." if len(prompt) > 500 else ""),
+                                                    height=100,
+                                                    key=f"preview_prompt_{idx}",
+                                                    disabled=True,
+                                                    label_visibility="collapsed"
+                                                )
+                                            if len(selected_prompts) > 5:
+                                                st.caption(f"... and {len(selected_prompts) - 5} more prompts")
                             
             except Exception as e:
                 st.error(f"❌ Error: {str(e)}")
