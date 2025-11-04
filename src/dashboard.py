@@ -746,72 +746,72 @@ with st.sidebar:
                             st.error(f"❌ Error parsing JSON file: {json_error or 'Invalid JSON format. Please ensure the file is valid JSON or JSONL format.'}")
                             st.session_state.uploaded_prompts = []
                         else:
-                        # Handle different JSON structures
-                        prompts = []
-                        
-                        # Helper function to split multiple questions into individual prompts
-                        def add_prompts_with_splitting(extracted_text):
-                            """Add prompts, splitting multiple questions if needed."""
-                            if "\n\nQ" in extracted_text and extracted_text.count("Q") > 1:
-                                # Split by question markers to get individual questions
-                                question_parts = extracted_text.split("\n\nQ")
-                                for i, part in enumerate(question_parts):
-                                    if part.strip():
-                                        if i == 0 and not part.startswith("Q"):
-                                            # First part might not have Q prefix
-                                            prompts.append(part.strip())
+                            # Handle different JSON structures
+                            prompts = []
+                            
+                            # Helper function to split multiple questions into individual prompts
+                            def add_prompts_with_splitting(extracted_text):
+                                """Add prompts, splitting multiple questions if needed."""
+                                if "\n\nQ" in extracted_text and extracted_text.count("Q") > 1:
+                                    # Split by question markers to get individual questions
+                                    question_parts = extracted_text.split("\n\nQ")
+                                    for i, part in enumerate(question_parts):
+                                        if part.strip():
+                                            if i == 0 and not part.startswith("Q"):
+                                                # First part might not have Q prefix
+                                                prompts.append(part.strip())
+                                            else:
+                                                prompts.append(f"Q{part.strip()}")
+                                else:
+                                    prompts.append(extracted_text)
+                            
+                            # If data is a list (from JSON array or JSONL)
+                            if isinstance(data, list):
+                                for item in data:
+                                    if isinstance(item, dict):
+                                        # Use comprehensive extraction function
+                                        extracted_prompt = extract_prompt_from_json_item(item)
+                                        if extracted_prompt:
+                                            add_prompts_with_splitting(extracted_prompt)
                                         else:
-                                            prompts.append(f"Q{part.strip()}")
-                            else:
-                                prompts.append(extracted_text)
-                        
-                        # If data is a list (from JSON array or JSONL)
-                        if isinstance(data, list):
-                            for item in data:
-                                if isinstance(item, dict):
-                                    # Use comprehensive extraction function
-                                    extracted_prompt = extract_prompt_from_json_item(item)
+                                            # Fallback: try to stringify the whole item
+                                            prompts.append(str(item))
+                                    elif isinstance(item, str):
+                                        prompts.append(item)
+                            
+                            # If data is a single dict
+                            elif isinstance(data, dict):
+                                if 'prompts' in data:
+                                    prompt_list = data['prompts']
+                                    if isinstance(prompt_list, list):
+                                        # Extract prompts from each item in the list
+                                        for item in prompt_list:
+                                            if isinstance(item, dict):
+                                                extracted = extract_prompt_from_json_item(item)
+                                                if extracted:
+                                                    add_prompts_with_splitting(extracted)
+                                            elif isinstance(item, str):
+                                                prompts.append(item)
+                                    else:
+                                        if isinstance(prompt_list, dict):
+                                            extracted = extract_prompt_from_json_item(prompt_list)
+                                        else:
+                                            extracted = str(prompt_list)
+                                        if extracted:
+                                            add_prompts_with_splitting(extracted)
+                                else:
+                                    # Try to extract prompt from the dict
+                                    extracted_prompt = extract_prompt_from_json_item(data)
                                     if extracted_prompt:
                                         add_prompts_with_splitting(extracted_prompt)
                                     else:
-                                        # Fallback: try to stringify the whole item
-                                        prompts.append(str(item))
-                                elif isinstance(item, str):
-                                    prompts.append(item)
-                        
-                        # If data is a single dict
-                        elif isinstance(data, dict):
-                            if 'prompts' in data:
-                                prompt_list = data['prompts']
-                                if isinstance(prompt_list, list):
-                                    # Extract prompts from each item in the list
-                                    for item in prompt_list:
-                                        if isinstance(item, dict):
-                                            extracted = extract_prompt_from_json_item(item)
-                                            if extracted:
-                                                add_prompts_with_splitting(extracted)
-                                        elif isinstance(item, str):
-                                            prompts.append(item)
-                                else:
-                                    if isinstance(prompt_list, dict):
-                                        extracted = extract_prompt_from_json_item(prompt_list)
-                                    else:
-                                        extracted = str(prompt_list)
-                                    if extracted:
-                                        add_prompts_with_splitting(extracted)
-                            else:
-                                # Try to extract prompt from the dict
-                                extracted_prompt = extract_prompt_from_json_item(data)
-                                if extracted_prompt:
-                                    add_prompts_with_splitting(extracted_prompt)
-                                else:
-                                    st.error("❌ Could not extract prompt from JSON. Please ensure the JSON contains a 'prompt', 'input', or 'messages' field.")
-                                    st.session_state.uploaded_prompts = []
-                                    prompts = []
-                        
-                        st.session_state.uploaded_prompts = prompts
-                        
-                        if st.session_state.uploaded_prompts:
+                                        st.error("❌ Could not extract prompt from JSON. Please ensure the JSON contains a 'prompt', 'input', or 'messages' field.")
+                                        st.session_state.uploaded_prompts = []
+                                        prompts = []
+                            
+                            st.session_state.uploaded_prompts = prompts
+                            
+                            if st.session_state.uploaded_prompts:
                             st.success(f"✅ Loaded {len(st.session_state.uploaded_prompts)} prompts from JSON/JSONL file")
                             
                             # Initialize selected prompts if not exists
