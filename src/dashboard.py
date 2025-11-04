@@ -262,12 +262,72 @@ with st.sidebar:
                     df_uploaded = pd.read_csv(uploaded_file)
                     if 'prompt' in df_uploaded.columns:
                         st.session_state.uploaded_prompts = df_uploaded['prompt'].tolist()
-                        st.success(f"✅ Loaded {len(st.session_state.uploaded_prompts)} prompts")
-                        if st.checkbox("Preview prompts", key="preview_csv"):
-                            st.dataframe(df_uploaded[['prompt']].head(5), use_container_width=True)
+                        st.success(f"✅ Loaded {len(st.session_state.uploaded_prompts)} prompts from CSV file")
+                        
+                        # Initialize selected prompts if not exists
+                        if 'selected_uploaded_prompts' not in st.session_state:
+                            st.session_state.selected_uploaded_prompts = st.session_state.uploaded_prompts.copy()
+                        
+                        # Show checkbox list for prompt selection (same as JSON)
+                        with st.expander("📋 Select Prompts to Test", expanded=True):
+                            st.markdown(f"**Total prompts loaded:** {len(st.session_state.uploaded_prompts)}")
+                            
+                            # Select all / Deselect all buttons
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                if st.button("✅ Select All", key="select_all_csv", use_container_width=True):
+                                    st.session_state.selected_uploaded_prompts = st.session_state.uploaded_prompts.copy()
+                                    st.rerun()
+                            with col2:
+                                if st.button("❌ Deselect All", key="deselect_all_csv", use_container_width=True):
+                                    st.session_state.selected_uploaded_prompts = []
+                                    st.rerun()
+                            
+                            st.markdown("---")
+                            
+                            # Show checkboxes for each prompt
+                            selected_prompts = []
+                            for idx, prompt in enumerate(st.session_state.uploaded_prompts):
+                                # Truncate prompt for display (show first 100 chars)
+                                prompt_preview = str(prompt)[:100] + "..." if len(str(prompt)) > 100 else str(prompt)
+                                prompt_preview = prompt_preview.replace('\n', ' ').replace('\r', ' ')
+                                
+                                # Checkbox for each prompt
+                                is_selected = st.checkbox(
+                                    f"Prompt {idx + 1}: {prompt_preview}",
+                                    value=prompt in st.session_state.selected_uploaded_prompts,
+                                    key=f"csv_prompt_checkbox_{idx}",
+                                    help=f"Click to select/deselect this prompt"
+                                )
+                                
+                                if is_selected:
+                                    selected_prompts.append(prompt)
+                            
+                            # Update session state
+                            st.session_state.selected_uploaded_prompts = selected_prompts
+                            
+                            st.markdown("---")
+                            st.info(f"**Selected:** {len(selected_prompts)} / {len(st.session_state.uploaded_prompts)} prompts")
+                            
+                            # Show preview of selected prompts
+                            if selected_prompts:
+                                with st.expander("👁️ Preview Selected Prompts", expanded=False):
+                                    for idx, prompt in enumerate(selected_prompts[:5], 1):
+                                        st.markdown(f"**Prompt {idx}:**")
+                                        st.text_area(
+                                            "",
+                                            value=str(prompt)[:500] + ("..." if len(str(prompt)) > 500 else ""),
+                                            height=100,
+                                            key=f"csv_preview_prompt_{idx}",
+                                            disabled=True,
+                                            label_visibility="collapsed"
+                                        )
+                                    if len(selected_prompts) > 5:
+                                        st.caption(f"... and {len(selected_prompts) - 5} more prompts")
                     else:
                         st.error("❌ CSV must have 'prompt' column")
                         st.session_state.uploaded_prompts = []
+                        st.session_state.selected_uploaded_prompts = []
                         
                 elif file_extension == 'json':
                     # Read file content as string (handles both bytes and text)
