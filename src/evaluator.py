@@ -178,7 +178,29 @@ class BedrockEvaluator:
             
         except Exception as e:
             metrics["status"] = "error"
-            metrics["error"] = str(e)
+            error_str = str(e)
+            metrics["error"] = error_str
+            
+            # Enhance error message for Anthropic access errors
+            if "use case details" in error_str.lower() and "ResourceNotFoundException" in error_str:
+                # The error message already includes helpful instructions, so we can enhance it
+                if "TO FIX THIS ERROR" not in error_str:
+                    region = self.region_name
+                    metrics["error"] = (
+                        f"Bedrock API error (ResourceNotFoundException): Model use case details have not been submitted for this account. "
+                        f"Fill out the Anthropic use case details form before using the model. "
+                        f"If you have already filled out the form, try again in 15 minutes. "
+                        f"(tried model ID: {model_id})\n\n"
+                        f"🔧 TO FIX THIS ERROR:\n"
+                        f"1. Go to AWS Bedrock Model Access: https://console.aws.amazon.com/bedrock/home?region={region}#/modelaccess\n"
+                        f"2. Find 'Anthropic' in the provider list\n"
+                        f"3. Click 'Request model access' or 'Enable'\n"
+                        f"4. Fill out the use case form and submit\n"
+                        f"5. Wait 5-15 minutes for approval\n"
+                        f"6. Try again after approval\n\n"
+                        f"See MANUAL_GUIDE.md section 'Issue 3.5' or FIX_ANTHROPIC_ACCESS.md for detailed instructions."
+                    )
+            
             metrics["latency_ms"] = timer.elapsed_ms if timer is not None and 'timer' in locals() else 0
             # Make sure input tokens are captured even on error
             if metrics["input_tokens"] == 0:
@@ -290,6 +312,26 @@ class BedrockEvaluator:
             except ClientError as e:
                 error_code = e.response.get("Error", {}).get("Code", "Unknown")
                 error_msg = e.response.get("Error", {}).get("Message", str(e))
+                
+                # Provide helpful message for Anthropic access errors
+                if error_code == "ResourceNotFoundException" and "use case details" in error_msg.lower():
+                    region = self.region_name
+                    last_error = (
+                        f"Bedrock API error (ResourceNotFoundException): Model use case details have not been submitted for this account. "
+                        f"Fill out the Anthropic use case details form before using the model. "
+                        f"If you have already filled out the form, try again in 15 minutes. "
+                        f"(tried model ID: {variant_id})\n\n"
+                        f"🔧 TO FIX THIS ERROR:\n"
+                        f"1. Go to AWS Bedrock Model Access: https://console.aws.amazon.com/bedrock/home?region={region}#/modelaccess\n"
+                        f"2. Find 'Anthropic' in the provider list\n"
+                        f"3. Click 'Request model access' or 'Enable'\n"
+                        f"4. Fill out the use case form and submit\n"
+                        f"5. Wait 5-15 minutes for approval\n"
+                        f"6. Try again after approval\n\n"
+                        f"See MANUAL_GUIDE.md section 'Issue 3.5' or FIX_ANTHROPIC_ACCESS.md for detailed instructions."
+                    )
+                    raise Exception(last_error)
+                
                 last_error = f"Bedrock API error ({error_code}): {error_msg} (tried model ID: {variant_id})"
                 
                 # If error mentions inference profile, try inference profile variants

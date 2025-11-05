@@ -58,6 +58,10 @@ logs/
 .env
 .env.local
 
+# Config files with credentials (if you have a local config override)
+config.local.py
+config.override.py
+
 # Test files
 test_*.py
 *_test.py

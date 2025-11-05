@@ -25,6 +25,24 @@ class MetricsLogger:
         
         df = pd.DataFrame(metrics_list)
         
+        # Convert numeric columns to proper numeric types before saving
+        numeric_columns = ['input_tokens', 'output_tokens', 'latency_ms', 
+                          'cost_usd_input', 'cost_usd_output', 'cost_usd_total']
+        for col in numeric_columns:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        
+        # Convert boolean columns
+        if 'json_valid' in df.columns:
+            # Handle various boolean representations
+            df['json_valid'] = df['json_valid'].astype(str).replace({
+                'True': True, 'False': False, 
+                'true': True, 'false': False,
+                '1': True, '0': False,
+                'TRUE': True, 'FALSE': False
+            })
+            df['json_valid'] = pd.to_numeric(df['json_valid'], errors='coerce').fillna(False).astype(bool)
+        
         # Ensure consistent column order
         expected_columns = [
             "timestamp", "run_id", "model_name", "model_id", "prompt_id",

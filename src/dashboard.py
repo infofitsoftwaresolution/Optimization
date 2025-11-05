@@ -585,10 +585,12 @@ if 'prompts_to_evaluate' not in st.session_state:
 if 'data_reload_key' not in st.session_state:
     st.session_state.data_reload_key = 0
 
-# Set default paths (removed from sidebar)
-config_path = "configs/models.yaml"
-raw_path = "data/runs/raw_metrics.csv"
-agg_path = "data/runs/model_comparison.csv"
+# Set default paths - use absolute paths based on project root
+# Get project root directory (parent of src/)
+project_root = Path(__file__).parent.parent
+config_path = str(project_root / "configs" / "models.yaml")
+raw_path = str(project_root / "data" / "runs" / "raw_metrics.csv")
+agg_path = str(project_root / "data" / "runs" / "model_comparison.csv")
 
 # Premium Sidebar
 with st.sidebar:
@@ -1239,6 +1241,15 @@ def load_data(raw_path: str, agg_path: str, cache_key: int = 0):
                     on_bad_lines='skip',  # Skip problematic lines instead of failing
                     engine='python'  # Use Python engine which is more lenient
                 )
+                # Convert numeric columns to proper numeric types
+                numeric_columns = ['input_tokens', 'output_tokens', 'latency_ms', 'cost_usd_input', 'cost_usd_output', 'cost_usd_total']
+                for col in numeric_columns:
+                    if col in raw_df.columns:
+                        raw_df[col] = pd.to_numeric(raw_df[col], errors='coerce')
+                # Convert boolean columns
+                if 'json_valid' in raw_df.columns:
+                    raw_df['json_valid'] = raw_df['json_valid'].astype(str).replace({'True': True, 'False': False, 'true': True, 'false': False, '1': True, '0': False})
+                    raw_df['json_valid'] = pd.to_numeric(raw_df['json_valid'], errors='coerce').fillna(0).astype(bool)
             except Exception:
                 # If that fails, try with default settings
                 try:
@@ -1432,11 +1443,16 @@ with tab1:
             # Save results automatically and reload data
             if results:
                 try:
-                    metrics_logger = MetricsLogger(Path("data/runs"))
+                    # Use absolute path based on project root
+                    project_root = Path(__file__).parent.parent
+                    data_runs_dir = project_root / "data" / "runs"
+                    data_runs_dir.mkdir(parents=True, exist_ok=True)  # Ensure directory exists
+                    
+                    metrics_logger = MetricsLogger(data_runs_dir)
                     metrics_logger.log_metrics(results)
                     
                     # Regenerate aggregated report to ensure all graphs are synced
-                    report_generator = ReportGenerator(Path("data/runs"))
+                    report_generator = ReportGenerator(data_runs_dir)
                     report_generator.generate_report()
                     
                     st.session_state.evaluation_results = results
@@ -1445,13 +1461,18 @@ with tab1:
                     st.cache_data.clear()
                     # Reload data with new cache key to ensure all components see fresh data
                     raw_df, agg_df = load_data(raw_path, agg_path, st.session_state.data_reload_key)
-                    st.success("✅ **Evaluation Complete!** Results saved and dashboard updated. All graphs synced.")
+                    
+                    # Reset evaluation flag after processing
+                    st.session_state.run_evaluation = False
+                    
+                    # Force page refresh to update all graphs with new data
+                    st.success("✅ **Evaluation Complete!** Results saved and dashboard updated. Refreshing graphs...")
+                    st.rerun()  # Refresh the page to show updated graphs
                 except Exception as e:
                     st.error(f"❌ Error saving results: {e}")
                     st.session_state.evaluation_results = results
-            
-            # Reset evaluation flag after processing
-            st.session_state.run_evaluation = False
+                    # Reset evaluation flag even on error
+                    st.session_state.run_evaluation = False
     
     # Always reload data with current cache key to ensure sync
     raw_df, agg_df = load_data(raw_path, agg_path, st.session_state.data_reload_key)
@@ -1471,11 +1492,17 @@ with tab1:
                 
                 with eval_col1:
                     if success_results:
-                        avg_latency = pd.DataFrame(success_results)['latency_ms'].mean()
+                        results_df = pd.DataFrame(success_results)
+                        # Safely convert to numeric
+                        latency_col = pd.to_numeric(results_df.get('latency_ms', pd.Series()), errors='coerce')
+                        avg_latency = latency_col.mean() if not latency_col.empty else 0
                         st.metric("⚡ Avg Latency", f"{avg_latency:.0f} ms")
                 
                 with eval_col2:
-                    total_cost = pd.DataFrame(results)['cost_usd_total'].sum()
+                    results_df = pd.DataFrame(results)
+                    # Safely convert to numeric
+                    cost_col = pd.to_numeric(results_df.get('cost_usd_total', pd.Series()), errors='coerce')
+                    total_cost = cost_col.sum() if not cost_col.empty else 0
                     st.metric("💰 Total Cost", f"${total_cost:.6f}")
                 
                 with eval_col3:
@@ -1486,8 +1513,12 @@ with tab1:
                 
                 with eval_col4:
                     if success_results:
-                        total_tokens = pd.DataFrame(success_results)[['input_tokens', 'output_tokens']].sum().sum()
-                        st.metric("📝 Total Tokens", f"{total_tokens:,}")
+                        results_df = pd.DataFrame(success_results)
+                        # Safely convert to numeric
+                        input_tokens = pd.to_numeric(results_df.get('input_tokens', pd.Series()), errors='coerce').fillna(0)
+                        output_tokens = pd.to_numeric(results_df.get('output_tokens', pd.Series()), errors='coerce').fillna(0)
+                        total_tokens = input_tokens.sum() + output_tokens.sum()
+                        st.metric("📝 Total Tokens", f"{int(total_tokens):,}")
             
             # Detailed results table
             st.subheader("📋 Detailed Results")
@@ -1605,24 +1636,385 @@ with tab1:
                 configured_models = registry.list_models()
                 target_models = [model['name'] for model in configured_models]
         
-        # If no models from config, use default target models
-        if not target_models:
-            target_models = ["Claude 3.5 Sonnet", "Llama 3.1 70B Instruct"]
+        # Clean model names in data (handle tuple format like "('Claude 3 Sonnet',)")
+        def clean_model_name(name):
+            if pd.isna(name):
+                return ""
+            name_str = str(name)
+            # Remove tuple formatting if present
+            if name_str.startswith("('") and name_str.endswith("',)"):
+                name_str = name_str[2:-3]  # Remove "('" and "',)"
+            elif name_str.startswith("('") and name_str.endswith("')"):
+                name_str = name_str[2:-2]  # Remove "('" and "')"
+            elif name_str.startswith('("') and name_str.endswith('",)'):
+                name_str = name_str[2:-3]  # Remove '("' and '",)'
+            return name_str.strip()
         
-        # Filter raw data to only include configured models
-        if "model_name" in raw_df.columns and target_models:
-            filtered_raw = raw_df[raw_df["model_name"].isin(target_models)].copy()
+        # Create a function to match model names - only match configured models
+        def matches_target_model(data_model_name, target_models):
+            """Check if data model name matches any target model.
+            
+            Rules:
+            - Exact matches always work
+            - For Claude: "Claude 3 Sonnet" matches "Claude 3.7 Sonnet" (same major version)
+            - For Llama: Must match BOTH version AND size (e.g., "3.2 11B" must match exactly)
+            """
+            if pd.isna(data_model_name):
+                return False
+                
+            cleaned_data_name = clean_model_name(str(data_model_name)).strip()
+            
+            for target in target_models:
+                target_clean = target.strip()
+                
+                # 1. Exact match (case-insensitive)
+                if cleaned_data_name.lower() == target_clean.lower():
+                    return True
+                
+                # 2. Parse model components
+                target_parts = target_clean.split()
+                data_parts = cleaned_data_name.split()
+                
+                if len(target_parts) < 2 or len(data_parts) < 2:
+                    continue
+                
+                # 3. Must have same family (Claude/Llama) and type (Sonnet/Instruct)
+                if target_parts[0].lower() != data_parts[0].lower():
+                    continue  # Different families
+                if target_parts[-1].lower() != data_parts[-1].lower():
+                    continue  # Different types
+                
+                # 4. Claude models: Match only if exact version match OR target has minor version and data has no minor
+                # "Claude 3.7 Sonnet" matches "Claude 3 Sonnet" but NOT "Claude 3.5 Sonnet"
+                if "claude" in target_clean.lower() and "sonnet" in target_clean.lower():
+                    # Extract versions: "Claude 3.7 Sonnet" -> "3.7", "Claude 3 Sonnet" -> "3"
+                    target_ver_str = target_parts[1] if len(target_parts) > 1 else ""
+                    data_ver_str = data_parts[1] if len(data_parts) > 1 else ""
+                    
+                    try:
+                        # Parse versions
+                        target_ver_parts = target_ver_str.split('.')
+                        data_ver_parts = data_ver_str.split('.')
+                        
+                        target_major = int(target_ver_parts[0]) if target_ver_parts[0] else 0
+                        data_major = int(data_ver_parts[0]) if data_ver_parts[0] else 0
+                        
+                        # Must have same major version
+                        if target_major != data_major or target_major == 0:
+                            continue
+                        
+                        # If both have minor versions, they must match EXACTLY
+                        if len(target_ver_parts) > 1 and len(data_ver_parts) > 1:
+                            target_minor = int(target_ver_parts[1])
+                            data_minor = int(data_ver_parts[1])
+                            # Exact match required: 3.7 matches 3.7, but NOT 3.5
+                            if target_minor == data_minor:
+                                return True
+                        # If target has minor version (3.7) but data doesn't (3), allow it
+                        # This allows "Claude 3 Sonnet" to match "Claude 3.7 Sonnet"
+                        elif len(target_ver_parts) > 1 and len(data_ver_parts) == 1:
+                            return True
+                        # If both have no minor version, they match
+                        elif len(target_ver_parts) == 1 and len(data_ver_parts) == 1:
+                            return True
+                        # If target has no minor but data has minor (e.g., "3" vs "3.5"), don't match
+                        # This prevents "Claude 3.7 Sonnet" from matching "Claude 3.5 Sonnet"
+                        else:
+                            continue
+                    except (ValueError, IndexError):
+                        pass
+                
+                # 5. Llama models: Must match BOTH version AND size
+                elif "llama" in target_clean.lower() and "instruct" in target_clean.lower():
+                    # Extract version and size from target: "Llama 3.2 11B Instruct"
+                    target_version = None
+                    target_size = None
+                    for part in target_parts:
+                        if '.' in part and part.replace('.', '').replace('-', '').isdigit():
+                            target_version = part
+                        elif 'b' in part.lower() or 'm' in part.lower():
+                            size_str = part.lower().replace('b', '').replace('m', '').replace('-', '')
+                            if size_str.isdigit():
+                                target_size = part.lower()
+                    
+                    # Extract version and size from data: "Llama 3 70B Instruct"
+                    data_version = None
+                    data_size = None
+                    for part in data_parts:
+                        if '.' in part and part.replace('.', '').replace('-', '').isdigit():
+                            data_version = part
+                        elif 'b' in part.lower() or 'm' in part.lower():
+                            size_str = part.lower().replace('b', '').replace('m', '').replace('-', '')
+                            if size_str.isdigit():
+                                data_size = part.lower()
+                    
+                    # Both version and size must match exactly
+                    if target_version and target_size and data_version and data_size:
+                        # Check version match (major version must match)
+                        version_match = False
+                        try:
+                            target_major = int(target_version.split('.')[0])
+                            data_major = int(data_version.split('.')[0])
+                            if target_major == data_major:
+                                # If both have minor versions, they must match
+                                if '.' in target_version and '.' in data_version:
+                                    target_minor = int(target_version.split('.')[1])
+                                    data_minor = int(data_version.split('.')[1])
+                                    version_match = (target_minor == data_minor)
+                                elif '.' in target_version:
+                                    # Target has minor, data doesn't - check if minor matches expected
+                                    version_match = True  # Allow "3" to match "3.2"
+                                else:
+                                    version_match = True
+                        except (ValueError, IndexError):
+                            pass
+                        
+                        # Check size match (must be exact)
+                        size_match = (target_size.lower() == data_size.lower())
+                        
+                        # Both must match
+                        if version_match and size_match:
+                            return True
+                
+            return False
+        
+        # Filter raw data - ONLY show models that match configured models
+        # Also normalize matched models to use configured model names (consolidate "Claude 3 Sonnet" -> "Claude 3.7 Sonnet")
+        if "model_name" in raw_df.columns:
+            if target_models:
+                # First clean the model names in raw data
+                raw_df_clean = raw_df.copy()
+                raw_df_clean["model_name"] = raw_df_clean["model_name"].apply(clean_model_name)
+                
+                # Function to normalize model name to configured name if it matches
+                def normalize_to_configured(data_model_name):
+                    for target_model in target_models:
+                        if matches_target_model(data_model_name, [target_model]):
+                            return target_model  # Return the configured model name
+                    return data_model_name  # Return original if no match
+                
+                # Filter to only include models that match target models
+                mask = raw_df_clean["model_name"].apply(lambda x: matches_target_model(x, target_models))
+                filtered_raw = raw_df_clean[mask].copy()
+                
+                # Normalize matched model names to configured names (consolidate duplicates)
+                if not filtered_raw.empty:
+                    filtered_raw["model_name"] = filtered_raw["model_name"].apply(normalize_to_configured)
+                
+                # Double-check: ensure all remaining rows match configured models
+                if not filtered_raw.empty:
+                    final_mask = filtered_raw["model_name"].apply(lambda x: matches_target_model(x, target_models))
+                    filtered_raw = filtered_raw[final_mask].copy()
+                
+                # If no matches found, don't show fallback data - keep it empty
+                # This ensures we only show configured models
+            else:
+                filtered_raw = raw_df.copy()
         else:
             filtered_raw = raw_df.copy()
         
-        # Filter aggregated data to only include configured models
-        if "model_name" in agg_df.columns and target_models:
-            filtered_agg = agg_df[agg_df["model_name"].isin(target_models)].copy()
+        # Filter aggregated data - ONLY show models that match configured models
+        # Also normalize matched models to use configured model names
+        if "model_name" in agg_df.columns:
+            if target_models:
+                # First clean the model names in aggregated data (handle tuple format)
+                agg_df_clean = agg_df.copy()
+                if "model_name" in agg_df_clean.columns:
+                    agg_df_clean["model_name"] = agg_df_clean["model_name"].apply(clean_model_name)
+                
+                # Function to normalize model name to configured name if it matches
+                def normalize_to_configured(data_model_name):
+                    for target_model in target_models:
+                        if matches_target_model(data_model_name, [target_model]):
+                            return target_model  # Return the configured model name
+                    return data_model_name  # Return original if no match
+                
+                # Filter to only include models that match target models (strict matching)
+                mask = agg_df_clean["model_name"].apply(lambda x: matches_target_model(x, target_models))
+                filtered_agg = agg_df_clean[mask].copy()
+                
+                # Normalize matched model names to configured names (consolidate duplicates)
+                if not filtered_agg.empty and "model_name" in filtered_agg.columns:
+                    filtered_agg["model_name"] = filtered_agg["model_name"].apply(normalize_to_configured)
+                    
+                    # After normalization, deduplicate: if multiple rows have same normalized model name, aggregate them
+                    # This handles cases where "Claude 3 Sonnet" and "Claude 3.7 Sonnet" both normalize to "Claude 3.7 Sonnet"
+                    if len(filtered_agg) > len(filtered_agg["model_name"].unique()):
+                        # Group by normalized model name and aggregate numeric columns
+                        numeric_cols = ['count', 'success_count', 'error_count', 'avg_input_tokens', 
+                                       'avg_output_tokens', 'p50_latency_ms', 'p95_latency_ms', 'p99_latency_ms',
+                                       'min_latency_ms', 'max_latency_ms', 'json_valid_pct', 
+                                       'avg_cost_usd_per_request', 'total_cost_usd']
+                        
+                        # Aggregate by model_name
+                        agg_dict = {}
+                        for col in filtered_agg.columns:
+                            if col == 'model_name':
+                                agg_dict[col] = 'first'  # Keep first model name
+                            elif col in numeric_cols and col in filtered_agg.columns:
+                                agg_dict[col] = 'sum' if 'total' in col or 'count' in col else 'mean'
+                            else:
+                                agg_dict[col] = 'first'
+                        
+                        filtered_agg = filtered_agg.groupby('model_name', as_index=False).agg(agg_dict)
+                
+                # Ensure we only keep rows that match exactly - no fallback
+                # CRITICAL: Only keep models that are exactly in target_models list (after normalization)
+                if not filtered_agg.empty:
+                    # Final check: only keep models that are exactly in the configured target_models list
+                    final_mask = filtered_agg["model_name"].apply(
+                        lambda x: x in target_models  # Exact match - must be in target_models list
+                    )
+                    filtered_agg = filtered_agg[final_mask].copy()
+                
+                # If aggregated data is missing some models, try to create aggregates from raw data
+                if not filtered_raw.empty and "model_name" in filtered_raw.columns:
+                    # Check which target models are missing from aggregated data
+                    missing_from_agg = []
+                    for target_model in target_models:
+                        has_match = False
+                        if not filtered_agg.empty:
+                            for agg_model_name in filtered_agg["model_name"]:
+                                if matches_target_model(agg_model_name, [target_model]):
+                                    has_match = True
+                                    break
+                        if not has_match:
+                            # Check if raw data has this model
+                            for raw_model_name in filtered_raw["model_name"]:
+                                if matches_target_model(raw_model_name, [target_model]):
+                                    missing_from_agg.append(target_model)
+                                    break
+                    
+                    # If we have raw data for missing models, create simple aggregates
+                    if missing_from_agg and not filtered_raw.empty:
+                        # Create basic aggregation for missing models from raw data
+                        for target_model in missing_from_agg:
+                            model_raw_data = filtered_raw[
+                                filtered_raw["model_name"].apply(lambda x: matches_target_model(x, [target_model]))
+                            ]
+                            if not model_raw_data.empty:
+                                # Helper function to safely convert to numeric
+                                def safe_numeric(series, default=0):
+                                    if series is None or series.empty:
+                                        return default
+                                    try:
+                                        numeric_series = pd.to_numeric(series, errors='coerce')
+                                        return numeric_series.dropna()
+                                    except:
+                                        return pd.Series([default])
+                                
+                                # Safely convert numeric columns
+                                latency_numeric = safe_numeric(model_raw_data.get("latency_ms", pd.Series()), 0)
+                                input_tokens_numeric = safe_numeric(model_raw_data.get("input_tokens", pd.Series()), 0)
+                                output_tokens_numeric = safe_numeric(model_raw_data.get("output_tokens", pd.Series()), 0)
+                                json_valid_numeric = safe_numeric(model_raw_data.get("json_valid", pd.Series()), 0)
+                                
+                                # Get cost columns (try both possible column names)
+                                cost_col = None
+                                if "cost_usd_total" in model_raw_data.columns:
+                                    cost_col = safe_numeric(model_raw_data["cost_usd_total"], 0)
+                                elif "cost_usd" in model_raw_data.columns:
+                                    cost_col = safe_numeric(model_raw_data["cost_usd"], 0)
+                                else:
+                                    cost_col = pd.Series([0])
+                                
+                                # Create a simple aggregate row
+                                agg_row = {
+                                    "model_name": target_model,
+                                    "count": len(model_raw_data),
+                                    "success_count": len(model_raw_data[model_raw_data.get("status", "") == "success"]) if "status" in model_raw_data.columns else len(model_raw_data),
+                                    "error_count": len(model_raw_data[model_raw_data.get("status", "") == "error"]) if "status" in model_raw_data.columns else 0,
+                                    "avg_input_tokens": float(input_tokens_numeric.mean()) if not input_tokens_numeric.empty else 0,
+                                    "avg_output_tokens": float(output_tokens_numeric.mean()) if not output_tokens_numeric.empty else 0,
+                                    "p50_latency_ms": float(latency_numeric.median()) if not latency_numeric.empty else 0,
+                                    "p95_latency_ms": float(latency_numeric.quantile(0.95)) if not latency_numeric.empty else 0,
+                                    "p99_latency_ms": float(latency_numeric.quantile(0.99)) if not latency_numeric.empty else 0,
+                                    "min_latency_ms": float(latency_numeric.min()) if not latency_numeric.empty else 0,
+                                    "max_latency_ms": float(latency_numeric.max()) if not latency_numeric.empty else 0,
+                                    "json_valid_pct": float(json_valid_numeric.mean() * 100) if not json_valid_numeric.empty else 0,
+                                    "avg_cost_usd_per_request": float(cost_col.mean()) if not cost_col.empty else 0,
+                                    "total_cost_usd": float(cost_col.sum()) if not cost_col.empty else 0,
+                                }
+                                # Add to filtered_agg
+                                filtered_agg = pd.concat([filtered_agg, pd.DataFrame([agg_row])], ignore_index=True)
+                
+                # Don't show all aggregated data as fallback - only show configured models
+                # If filtered_agg is empty, keep it empty (don't show unconfigured models)
+            else:
+                filtered_agg = agg_df.copy()
         else:
             filtered_agg = agg_df.copy()
         
         # Premium Summary Cards
         st.header("📈 Executive Summary")
+        
+        # Check which configured models have data (in both aggregated and raw)
+        models_with_data = set()
+        if not filtered_agg.empty and "model_name" in filtered_agg.columns:
+            for model_name in filtered_agg["model_name"]:
+                cleaned = clean_model_name(model_name)
+                models_with_data.add(cleaned)
+        
+        # Also check raw data for models that might not be aggregated yet
+        models_in_raw = set()
+        if not filtered_raw.empty and "model_name" in filtered_raw.columns:
+            for model_name in filtered_raw["model_name"].unique():
+                cleaned = clean_model_name(model_name)
+                models_in_raw.add(cleaned)
+        
+        # Show helpful warning/info if some configured models don't have data
+        if target_models:
+            missing_models = []
+            models_with_any_data = []
+            for target_model in target_models:
+                # Check if this target model has any matching data in aggregated or raw
+                has_match = False
+                # Check aggregated data
+                for data_model in models_with_data:
+                    if matches_target_model(data_model, [target_model]):
+                        has_match = True
+                        models_with_any_data.append(target_model)
+                        break
+                # If not found in aggregated, check raw data
+                if not has_match:
+                    for data_model in models_in_raw:
+                        if matches_target_model(data_model, [target_model]):
+                            has_match = True
+                            models_with_any_data.append(target_model)
+                            break
+                if not has_match:
+                    missing_models.append(target_model)
+            
+            # Show warning only if we have some data but not all
+            if missing_models and (not filtered_agg.empty or not filtered_raw.empty):
+                # Check what models we actually have data for
+                available_models = []
+                if not filtered_agg.empty and "model_name" in filtered_agg.columns:
+                    available_models.extend(filtered_agg["model_name"].unique().tolist())
+                if not filtered_raw.empty and "model_name" in filtered_raw.columns:
+                    available_models.extend(filtered_raw["model_name"].unique().tolist())
+                available_models = list(set(available_models))
+                
+                st.warning(f"""
+                ⚠️ **No data found for configured model(s)**: {', '.join(missing_models)}
+                
+                **Configured models**: {', '.join(target_models)}  
+                **Available data**: {', '.join([clean_model_name(m) for m in available_models[:3]])}{'...' if len(available_models) > 3 else ''}
+                
+                To see data for all configured models, run a new evaluation using the sidebar. 
+                The dashboard will use the correct model IDs from your configuration.
+                """)
+            elif missing_models and filtered_agg.empty:
+                st.info(f"""
+                📊 **No evaluation data found for your configured models**: {', '.join(target_models)}
+                
+                To get started:
+                1. Use the sidebar to enter a prompt or upload a file
+                2. Select the models you want to test
+                3. Click "🚀 Run Evaluation"
+                
+                Your configured models are: {', '.join(target_models)}
+                """)
         
         if not filtered_agg.empty:
             col1, col2, col3, col4 = st.columns(4)
@@ -1715,6 +2107,13 @@ with tab1:
             
             # Use synced data - ensure fresh copy from loaded data
             success_df = filtered_raw[filtered_raw["status"] == "success"].copy() if "status" in filtered_raw.columns else filtered_raw.copy()
+            
+            # CRITICAL: Final verification - ensure only configured models are shown
+            if not success_df.empty and target_models and "model_name" in success_df.columns:
+                final_verification = success_df["model_name"].apply(
+                    lambda x: matches_target_model(x, target_models)
+                )
+                success_df = success_df[final_verification].copy()
             
             if not success_df.empty:
                 if viz_option == "Performance Dashboard":

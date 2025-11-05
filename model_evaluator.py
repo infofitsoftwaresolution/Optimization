@@ -9,6 +9,7 @@ import time
 import statistics
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime
+from botocore.exceptions import ClientError
 from config import MODELS, PRICING, EVAL_SETTINGS, AWS_PROFILE, AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
 
 
@@ -318,9 +319,58 @@ class ModelEvaluator:
                 
                 break
                 
+            except ClientError as e:
+                latency_ms = (time.time() - start_time) * 1000 if latency_ms is None else latency_ms
+                
+                # Extract error details from boto3 ClientError
+                error_code = e.response.get("Error", {}).get("Code", "Unknown")
+                error_msg = e.response.get("Error", {}).get("Message", str(e))
+                error_str = f"{error_code}: {error_msg}"
+                
+                # Detect and provide helpful message for Anthropic access errors
+                if error_code == "ResourceNotFoundException" and "use case details" in error_msg.lower():
+                    region = AWS_REGION
+                    output = (
+                        f"❌ Bedrock API error (ResourceNotFoundException): Model use case details have not been submitted for this account. "
+                        f"Fill out the Anthropic use case details form before using the model. "
+                        f"If you have already filled out the form, try again in 15 minutes. "
+                        f"(tried model ID: {self.model_id})\n\n"
+                        f"🔧 TO FIX THIS ERROR:\n"
+                        f"1. Go to AWS Bedrock Model Access: https://console.aws.amazon.com/bedrock/home?region={region}#/modelaccess\n"
+                        f"2. Find 'Anthropic' in the provider list\n"
+                        f"3. Click 'Request model access' or 'Enable'\n"
+                        f"4. Fill out the use case form and submit\n"
+                        f"5. Wait 5-15 minutes for approval\n"
+                        f"6. Try again after approval\n\n"
+                        f"See MANUAL_GUIDE.md section 'Issue 3.5' for detailed instructions."
+                    )
+                else:
+                    output = f"❌ Bedrock API error ({error_code}): {error_msg} (tried model ID: {self.model_id})"
+                break
+                
             except Exception as e:
                 latency_ms = (time.time() - start_time) * 1000 if latency_ms is None else latency_ms
-                output = f"Error: {str(e)}"
+                error_str = str(e)
+                
+                # Also check generic exceptions for the error pattern
+                if "ResourceNotFoundException" in error_str and "use case details" in error_str.lower():
+                    region = AWS_REGION
+                    output = (
+                        f"❌ Bedrock API error (ResourceNotFoundException): Model use case details have not been submitted for this account. "
+                        f"Fill out the Anthropic use case details form before using the model. "
+                        f"If you have already filled out the form, try again in 15 minutes. "
+                        f"(tried model ID: {self.model_id})\n\n"
+                        f"🔧 TO FIX THIS ERROR:\n"
+                        f"1. Go to AWS Bedrock Model Access: https://console.aws.amazon.com/bedrock/home?region={region}#/modelaccess\n"
+                        f"2. Find 'Anthropic' in the provider list\n"
+                        f"3. Click 'Request model access' or 'Enable'\n"
+                        f"4. Fill out the use case form and submit\n"
+                        f"5. Wait 5-15 minutes for approval\n"
+                        f"6. Try again after approval\n\n"
+                        f"See MANUAL_GUIDE.md section 'Issue 3.5' for detailed instructions."
+                    )
+                else:
+                    output = f"❌ Error: {error_str} (tried model ID: {self.model_id})"
                 break
         
         return output, latency_ms, valid_json, retries, json_was_cleaned
@@ -339,6 +389,8 @@ class ModelEvaluator:
         
         latencies = []
         self.results = []
+        anthropic_access_error_count = 0  # Track Anthropic access errors
+        max_anthropic_errors = 2  # Stop after 2 consecutive Anthropic access errors
         
         for prompt_data in prompts:
             prompt_text = prompt_data["prompt"]
@@ -348,6 +400,45 @@ class ModelEvaluator:
             
             # Invoke model
             output, latency_ms, valid_json, retries, json_was_cleaned = self.invoke_model(prompt_text)
+            
+            # Check if this is an Anthropic access error
+            is_anthropic_error = (
+                (output.startswith("❌") or output.startswith("Error:")) and 
+                "use case details" in output.lower()
+            )
+            
+            if is_anthropic_error:
+                anthropic_access_error_count += 1
+                
+                # If we've seen multiple Anthropic access errors, skip remaining prompts for this model
+                if anthropic_access_error_count >= max_anthropic_errors:
+                    print(f" ✗ ERROR")
+                    print(f"\n    ⛔ STOPPING: Anthropic model access not enabled after {anthropic_access_error_count} errors.")
+                    print(f"    This model requires Anthropic access to be enabled in AWS Bedrock.")
+                    print(f"    Fix this issue first, then re-run the evaluation.")
+                    print(f"    See error details in results for instructions.\n")
+                    
+                    # Add a note to remaining prompts that were skipped
+                    remaining_prompts = len(prompts) - len(self.results)
+                    if remaining_prompts > 0:
+                        for remaining_idx in range(prompt_index + 1, prompt_index + 1 + remaining_prompts):
+                            skipped_result = {
+                                "prompt_index": remaining_idx,
+                                "model_key": self.model_key,
+                                "model_name": self.model_config["name"],
+                                "prompt_snippet": f"[SKIPPED - Anthropic access not enabled]",
+                                "input_tokens": 0,
+                                "output_tokens": 0,
+                                "latency_ms": None,
+                                "cost_usd": 0.0,
+                                "valid_json": False,
+                                "retries": 0,
+                                "json_was_cleaned": False,
+                                "output": "[SKIPPED: Anthropic model access not enabled. Enable access in AWS Bedrock and re-run.]",
+                                "timestamp": datetime.now().isoformat(),
+                            }
+                            self.results.append(skipped_result)
+                    break
             
             # Calculate metrics
             input_tokens = self.estimate_tokens(prompt_text)
@@ -378,8 +469,22 @@ class ModelEvaluator:
             
             self.results.append(result)
             
-            status = "✓" if valid_json else "✗"
-            print(f" {status} ({latency_ms:.0f}ms)")
+            # Check if this was an error
+            if output.startswith("❌") or output.startswith("Error:"):
+                status = "✗ ERROR"
+                print(f" {status}")
+                # Print error message for visibility
+                if is_anthropic_error:
+                    print(f"    ⚠️  Anthropic model access not enabled. See error details in results.")
+                    if anthropic_access_error_count == 1:
+                        print(f"    ⚠️  If this error continues, remaining prompts for this model will be skipped.")
+            else:
+                status = "✓" if valid_json else "✗"
+                # Use ASCII-safe characters for Windows console compatibility
+                status_safe = status.replace("✓", "[OK]").replace("❌", "[ERROR]")
+                print(f" {status_safe} ({latency_ms:.0f}ms)")
+                # Reset error count on success
+                anthropic_access_error_count = 0
         
         return self.results
     

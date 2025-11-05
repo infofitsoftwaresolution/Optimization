@@ -1,6 +1,10 @@
 # 🚀 Model Evaluation Framework for AWS Bedrock LLMs
 
-Compare multiple Bedrock-hosted LLMs (Claude Sonnet, Llama 3, Titan, etc.) using production-like prompts from CSV. The framework measures latency, token usage, JSON validity, and cost, aggregates results, and visualizes comparisons in a Streamlit dashboard.
+Compare multiple Bedrock-hosted LLMs using production-like prompts. The framework measures latency, token usage, JSON validity, and cost, aggregates results, and visualizes comparisons in a Streamlit dashboard.
+
+**⚠️ This project is configured to use only two models:**
+- Claude 3.7 Sonnet (`us.anthropic.claude-3-7-sonnet-20250219-v1:0`)
+- Llama 3.2 11B Instruct (`us.meta.llama3-2-11b-instruct-v1:0`)
 
 ## 📋 Features
 
@@ -96,7 +100,13 @@ This will install all required packages including:
 
 ### Step 4: Configure AWS Credentials
 
-You have two options:
+**⚠️ IMPORTANT:** The project uses only these two models:
+- `us.anthropic.claude-3-7-sonnet-20250219-v1:0` (Claude 3.7 Sonnet)
+- `us.meta.llama3-2-11b-instruct-v1:0` (Llama 3.2 11B Instruct)
+
+Make sure these models are enabled in your AWS Bedrock account before running evaluations.
+
+You have three options for AWS credentials:
 
 **Option A: Using `.env` file (Recommended)**
 
@@ -113,12 +123,24 @@ You have two options:
    ```env
    AWS_ACCESS_KEY_ID=your_access_key_here
    AWS_SECRET_ACCESS_KEY=your_secret_key_here
-   AWS_REGION=us-east-1
+   AWS_REGION=us-east-2
    ```
 
    **⚠️ Important:** Never commit the `.env` file to version control!
 
-**Option B: Using AWS Credentials File**
+**Option B: Using AWS Profile**
+
+If you have AWS CLI configured, you can set the profile in `config.py`:
+```python
+AWS_PROFILE = "your-profile-name"
+```
+
+Or set it as an environment variable:
+```bash
+export AWS_PROFILE=your-profile-name
+```
+
+**Option C: Using AWS Credentials File**
 
 Configure AWS credentials using AWS CLI:
 ```bash
@@ -130,8 +152,13 @@ Or manually edit `~/.aws/credentials`:
 [default]
 aws_access_key_id = your_access_key_here
 aws_secret_access_key = your_secret_key_here
-region = us-east-1
+region = us-east-2
 ```
+
+**Note:** If you don't set credentials, the code will try to use:
+1. Environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
+2. AWS Profile (if configured)
+3. Default AWS credentials (~/.aws/credentials or IAM role)
 
 ### Step 5: Convert JSON Logs to CSV (Extract Prompts)
 
@@ -177,22 +204,32 @@ prompt_id,prompt,expected_json,category
 1. Edit `configs/models.yaml` and update with your Bedrock model IDs:
 
 ```yaml
-region_name: us-east-1  # Change if your models are in a different region
+region_name: us-east-2  # Change if your models are in a different region
 
 models:
-  - name: Claude 3 Sonnet
+  - name: Claude 3.7 Sonnet
     provider: anthropic
-    bedrock_model_id: anthropic.claude-3-sonnet-20240229-v1:0  # Update with your model ID
+    bedrock_model_id: us.anthropic.claude-3-7-sonnet-20250219-v1:0
     tokenizer: anthropic
     pricing:
-      input_per_1k_tokens_usd: 0.003    # Update with current pricing
-      output_per_1k_tokens_usd: 0.015   # Update with current pricing
+      input_per_1k_tokens_usd: 0.008
+      output_per_1k_tokens_usd: 0.024
     generation_params:
-      max_tokens: 512
-      temperature: 0.2
+      max_tokens: 1500
+      temperature: 0.7
       top_p: 0.95
 
-  # Add more models as needed...
+  - name: Llama 3.2 11B Instruct
+    provider: meta
+    bedrock_model_id: us.meta.llama3-2-11b-instruct-v1:0
+    tokenizer: llama
+    pricing:
+      input_per_1k_tokens_usd: 0.0006
+      output_per_1k_tokens_usd: 0.0008
+    generation_params:
+      max_tokens: 1500
+      temperature: 0.7
+      top_p: 0.95
 ```
 
 **💡 Tips:**
@@ -224,7 +261,7 @@ python scripts/run_evaluation.py --models all --prompts data/test_prompts.csv --
 
 **Evaluate Specific Models:**
 ```bash
-python scripts/run_evaluation.py --models "Claude 3 Sonnet,Llama 3 70B Instruct"
+python scripts/run_evaluation.py --models "Claude 3.7 Sonnet,Llama 3.2 11B Instruct"
 ```
 
 **Other Useful Options:**
@@ -358,17 +395,17 @@ pip install -r requirements.txt
 After running evaluation, you'll see:
 
 ```
-✅ Found 3 model(s): ['Claude 3 Sonnet', 'Llama 3 70B Instruct', 'Titan Text Premier']
+✅ Found 2 model(s): ['Claude 3.7 Sonnet', 'Llama 3.2 11B Instruct']
 ✅ Loaded 16 prompt(s)
 🏃 Run ID: run_20250101_120000
 🚀 Starting evaluation...
-   Models: 3
+   Models: 2
    Prompts: 16
-   Total evaluations: 48
+   Total evaluations: 32
 
-Evaluating: 100%|████████████| 48/48 [02:15<00:00,  2.81s/eval]
+Evaluating: 100%|████████████| 32/32 [02:15<00:00,  2.81s/eval]
 
-✅ Evaluation complete! Collected 48 metric records
+✅ Evaluation complete! Collected 32 metric records
 💾 Saving metrics...
    Saved to: data/runs/raw_metrics.csv
 📊 Generating aggregated report...
@@ -376,8 +413,8 @@ Evaluating: 100%|████████████| 48/48 [02:15<00:00,  2.81
 
 📈 Summary:
 model_name              count  avg_input_tokens  p95_latency_ms  avg_cost_usd_per_request
-Claude 3 Sonnet         16     1250.3           2150.5          0.008425
-Llama 3 70B Instruct    16     1248.7           2890.2          0.005234
+Claude 3.7 Sonnet       16     1250.3           2150.5          0.008425
+Llama 3.2 11B Instruct  16     1248.7           2890.2          0.005234
 ```
 
 ---

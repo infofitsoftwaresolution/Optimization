@@ -80,6 +80,17 @@ class ReportGenerator:
         if df.empty:
             return pd.DataFrame()
         
+        # Convert numeric columns to proper numeric types
+        numeric_columns = ['input_tokens', 'output_tokens', 'latency_ms', 
+                          'cost_usd_input', 'cost_usd_output', 'cost_usd_total']
+        for col in numeric_columns:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        
+        # Convert boolean columns
+        if 'json_valid' in df.columns:
+            df['json_valid'] = pd.to_numeric(df['json_valid'], errors='coerce').fillna(0).astype(bool)
+        
         # Filter out errors for latency calculations
         success_df = df[df["status"] == "success"].copy()
         

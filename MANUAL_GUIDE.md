@@ -64,12 +64,25 @@ AWS_ACCESS_KEY_ID = "YOUR_ACCESS_KEY_ID_HERE"
 AWS_SECRET_ACCESS_KEY = "YOUR_SECRET_ACCESS_KEY_HERE"
 ```
 
-### 3.2 Replace with Your Credentials
+### 3.2 Set Your Credentials
+
+**Option 1: Use Environment Variables (Recommended)**
+
+Create a `.env` file in the project root:
+```env
+AWS_ACCESS_KEY_ID=your_access_key_here
+AWS_SECRET_ACCESS_KEY=your_secret_key_here
+AWS_REGION=us-east-2
+```
+
+**Option 2: Edit config.py directly**
 
 ```python
 AWS_ACCESS_KEY_ID = "AKIAXXXXXXXXXXXXX"  # Your actual Access Key ID
 AWS_SECRET_ACCESS_KEY = "your_secret_key_here"  # Your actual Secret Key
 ```
+
+**⚠️ SECURITY WARNING:** If you edit `config.py` directly, make sure it's in `.gitignore` or never commit it with real credentials!
 
 ### 3.3 (Optional) Update AWS Region
 
@@ -190,6 +203,156 @@ head -20 results/detailed_results_*.csv
    - JSON validity
    - Token counts
 
+## Step 6.5: View Results in Interactive Dashboard (Optional)
+
+You can also view your results in an interactive Streamlit dashboard with charts and visualizations.
+
+### ⚠️ Important: Streamlit Must Be Started Manually
+
+**Key Point:** Streamlit is NOT running automatically. You MUST start it manually by running a command. Unlike a website that's always available, Streamlit is a server application that you start when you need it, and it runs until you stop it.
+
+**Common Mistake:** Don't try to open `http://localhost:8501` in your browser BEFORE running the Streamlit command - you'll get "connection refused" because nothing is listening on that port yet!
+
+### Launch the Dashboard
+
+**Important:** Make sure you're in the project directory first!
+
+1. Open a terminal/command prompt
+2. Navigate to the project directory:
+   ```bash
+   cd d:\Optimization
+   ```
+   (or wherever your project is located)
+
+3. Run the Streamlit command:
+   ```bash
+   streamlit run src/dashboard.py
+   ```
+   
+   **Alternative (if the above doesn't work):**
+   ```bash
+   python -m streamlit run src/dashboard.py
+   ```
+
+**What happens:**
+1. **First:** The command starts the Streamlit server (this takes 5-10 seconds)
+2. **Then:** You'll see output in the terminal showing it's starting up
+3. **Wait for:** The message `You can now view your Streamlit app in your browser.`
+4. **Finally:** Open your browser and go to `http://localhost:8501` (or the URL shown in terminal)
+5. **Important:** Keep the terminal window open! If you close it, Streamlit stops and you'll get "connection refused" again.
+
+**The dashboard will NOT work if:**
+- ❌ You haven't run the `streamlit run` command yet
+- ❌ You closed the terminal window where Streamlit is running
+- ❌ Streamlit crashed or encountered an error (check the terminal for error messages)
+
+**Expected terminal output:**
+```
+You can now view your Streamlit app in your browser.
+Local URL: http://localhost:8501
+Network URL: http://192.168.x.x:8501
+```
+
+**Dashboard Features:**
+- 📊 **Interactive Charts**: Visualize latency, cost, token usage, and JSON validity
+- 📈 **Historical Results**: View and compare all your past evaluations
+- 🔍 **Filters**: Filter by model, prompt, or date range
+- 📥 **Export**: Download filtered results as CSV
+- ⚡ **Real-time Evaluation**: Run new evaluations directly from the dashboard
+
+**To stop the dashboard:**
+- Press `Ctrl+C` in the terminal where Streamlit is running
+- **Warning:** Once you stop it, the dashboard will be unavailable until you start it again with the command above
+
+### Troubleshooting Dashboard Connection Issues
+
+**Problem: "ERR_CONNECTION_REFUSED" or "localhost refused to connect"**
+
+This means Streamlit isn't running. Here's how to fix it:
+
+1. **Check if Streamlit is installed:**
+   ```bash
+   python -m streamlit --version
+   ```
+   If you get an error, install Streamlit:
+   ```bash
+   pip install streamlit
+   ```
+
+2. **Make sure you're in the correct directory:**
+   ```bash
+   # Windows PowerShell
+   cd d:\Optimization
+   
+   # Windows Command Prompt
+   cd d:\Optimization
+   
+   # Verify you're in the right place
+   dir src\dashboard.py
+   ```
+
+3. **Run the command from the project root:**
+   ```bash
+   streamlit run src/dashboard.py
+   ```
+   
+   The terminal should show output like:
+   ```
+   Collecting usage statistics. To deactivate, set browser.gatherUsageStats to false.
+   ...
+   You can now view your Streamlit app in your browser.
+   ```
+
+4. **Keep the terminal window open** - Streamlit needs to keep running for the dashboard to work
+
+5. **Wait a few seconds** after running the command before opening the browser
+
+6. **Check if another process is using port 8501:**
+   - Windows PowerShell:
+     ```powershell
+     netstat -ano | findstr :8501
+     ```
+   - If something is using the port, you can either:
+     - Stop that process
+     - Use a different port: `streamlit run src/dashboard.py --server.port 8502`
+
+**Problem: Streamlit is running but browser shows "ERR_CONNECTION_REFUSED"**
+
+If `netstat` shows port 8501 is LISTENING but you still can't connect:
+
+1. **Try using 127.0.0.1 instead of localhost:**
+   - Instead of: `http://localhost:8501`
+   - Try: `http://127.0.0.1:8501`
+
+2. **Clear browser cache or try a different browser:**
+   - Sometimes browser cache can cause issues
+   - Try Chrome, Firefox, or Edge
+
+3. **Check Windows Firewall:**
+   - Windows might be blocking localhost connections
+   - Try temporarily disabling firewall to test
+   - Or add an exception for Python/Streamlit
+
+4. **Verify Streamlit is actually running:**
+   ```powershell
+   netstat -ano | findstr :8501
+   ```
+   You should see `LISTENING` status. If not, restart Streamlit.
+
+5. **Try accessing the Network URL instead:**
+   - Streamlit shows a "Network URL" when it starts (like `http://192.168.x.x:8501`)
+   - Try that URL instead of localhost
+
+6. **Check if antivirus is blocking:**
+   - Some antivirus software blocks localhost connections
+   - Try adding an exception for Python/Streamlit
+
+**If you still get errors:**
+- Make sure all dependencies are installed: `pip install -r requirements.txt`
+- Check that `src/dashboard.py` exists in your project directory
+- Try running with verbose output: `streamlit run src/dashboard.py --logger.level=debug`
+- Check the terminal window where Streamlit is running for any error messages
+
 ## Step 7: Understanding the Output
 
 ### Summary Report (`summary_TIMESTAMP.csv`)
@@ -274,6 +437,75 @@ python -c "import boto3; client = boto3.client('sts'); print(client.get_caller_i
 - Check AWS Console → Bedrock → Model access
 - Ensure your IAM user has `bedrock:InvokeModel` permission
 
+### Issue 3.5: "Model use case details have not been submitted" (Anthropic Models)
+
+**Error Message:**
+```
+ResourceNotFoundException: Model use case details have not been submitted for this account. 
+Fill out the Anthropic use case details form before using the model.
+```
+
+**What this means:**
+- Anthropic models (Claude) require you to enable them in AWS Bedrock first
+- You must submit a use case form before you can use Claude models
+- This is a one-time setup per AWS account
+
+**How to Fix (Step-by-Step):**
+
+1. **Log into AWS Console:**
+   - Go to https://console.aws.amazon.com
+   - Sign in with your AWS account
+
+2. **Navigate to Amazon Bedrock:**
+   - Search for "Bedrock" in the AWS Console search bar
+   - Click on "Amazon Bedrock"
+
+3. **Go to Model Access:**
+   - In the left sidebar, click on "Model access"
+   - Or go directly: https://console.aws.amazon.com/bedrock/home?region=us-east-2#/modelaccess
+
+4. **Enable Anthropic Models:**
+   - Look for "Anthropic" in the list of model providers
+   - Click "Request model access" or "Enable" next to Anthropic models
+   - You'll see models like:
+     - Claude 3.5 Sonnet
+     - Claude 3.7 Sonnet
+     - Claude 3.5 Haiku
+     - etc.
+
+5. **Fill Out the Use Case Form:**
+   - A form will appear asking for:
+     - **Use case description**: Describe what you're using the models for (e.g., "Model evaluation and comparison for cost optimization")
+     - **Company/Organization**: Your organization name
+     - **Accept Terms**: Check the terms and conditions box
+   - Fill out all required fields
+   - Click "Submit"
+
+6. **Wait for Approval:**
+   - Usually takes 5-15 minutes (sometimes instant)
+   - You'll receive an email confirmation when approved
+   - The status will change from "Pending" to "Access granted" in the console
+
+7. **Verify Access:**
+   - Go back to Model Access in Bedrock
+   - Check that Anthropic models show "Access granted" status
+   - Make sure you're checking the correct region (should match your `AWS_REGION` in `config.py`)
+
+8. **Try Again:**
+   - Once approved, wait 1-2 minutes for the changes to propagate
+   - Run your evaluation again
+
+**Important Notes:**
+- ⏱️ **Wait Time**: After submitting, wait 15 minutes as mentioned in the error message
+- 🌍 **Region**: Make sure you enable models in the same region as your `AWS_REGION` in `config.py` (e.g., `us-east-2`)
+- 🔄 **Multiple Regions**: If you use multiple regions, you need to enable models in each region separately
+- ✅ **One-Time Setup**: This is a one-time process per AWS account
+
+**Alternative: Use Llama Model (No Approval Required)**
+
+If you need to test immediately, you can use the Llama model which doesn't require use case approval:
+- Llama 3.2 11B Instruct (already configured in your setup)
+
 ### Issue 4: "File not found" errors
 
 **Check:**
@@ -342,6 +574,9 @@ python evaluate.py --prompts 20251001T000153731Z_e9c5e90710a8738a.json --models 
 
 # Custom output directory
 python evaluate.py --prompts 20251001T000153731Z_e9c5e90710a8738a.json --output-dir ./custom_results
+
+# Launch Streamlit dashboard (interactive visualization)
+streamlit run src/dashboard.py
 
 # View help
 python evaluate.py --help

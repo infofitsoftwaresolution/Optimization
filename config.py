@@ -4,18 +4,43 @@ Define models, pricing, and evaluation settings here.
 """
 
 from typing import Dict, Any
+import os
+
+# Load environment variables from .env file if it exists
+try:
+    from dotenv import load_dotenv
+    from pathlib import Path
+    
+    # Load .env file from project root
+    env_path = Path(__file__).parent / ".env"
+    if env_path.exists():
+        load_dotenv(env_path)
+except ImportError:
+    # python-dotenv not installed, skip loading .env file
+    pass
 
 # AWS Configuration
-AWS_PROFILE = "bells-dev"  # Used if AWS_ACCESS_KEY_ID not set
-AWS_REGION = "us-east-2"
+# Priority order for credentials:
+# 1. Environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) from .env file or system
+# 2. AWS Profile (AWS_PROFILE)
+# 3. Default AWS credentials (~/.aws/credentials or IAM role)
 
-# AWS Credentials (if using direct credentials instead of profile)
-# Leave as None to use AWS_PROFILE or default credentials
-# TODO: Replace with your AWS credentials
-AWS_ACCESS_KEY_ID = "YOUR_ACCESS_KEY_ID_HERE"
-AWS_SECRET_ACCESS_KEY = "YOUR_SECRET_ACCESS_KEY_HERE"
+# AWS Region (required)
+AWS_REGION = os.getenv("AWS_REGION", "us-east-2")
+
+# AWS Profile (optional - used if AWS_ACCESS_KEY_ID not set)
+AWS_PROFILE = os.getenv("AWS_PROFILE", None)
+
+# AWS Credentials (optional - set via environment variables or leave as None)
+# Set these in your environment or .env file:
+#   export AWS_ACCESS_KEY_ID=your_access_key_here
+#   export AWS_SECRET_ACCESS_KEY=your_secret_key_here
+# Or use AWS_PROFILE instead
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", None)
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", None)
 
 # Model IDs for Bedrock
+# Only two models configured: Claude and Llama
 MODELS: Dict[str, Dict[str, Any]] = {
     "claude-sonnet": {
         "model_id": "us.anthropic.claude-3-7-sonnet-20250219-v1:0",
@@ -27,20 +52,14 @@ MODELS: Dict[str, Dict[str, Any]] = {
         "provider": "meta",
         "name": "Llama 3.2 11B Instruct",
     },
-    # Add more models here as needed
-    # "claude-haiku": {
-    #     "model_id": "us.anthropic.claude-3-5-haiku-20241022-v2:0",
-    #     "provider": "anthropic",
-    #     "name": "Claude 3.5 Haiku",
-    # },
 }
 
 # Pricing per 1K tokens (input/output) in USD
 # Source: AWS Bedrock pricing as of 2025
+# Only pricing for Claude and Llama models
 PRICING: Dict[str, Dict[str, float]] = {
     "claude-sonnet": {"input": 0.008, "output": 0.024},
     "llama-3-2-11b": {"input": 0.0006, "output": 0.0008},
-    # Add pricing for other models
 }
 
 # Evaluation Settings

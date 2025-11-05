@@ -35,7 +35,7 @@ Examples:
   python scripts/run_evaluation.py --models all
 
   # Evaluate specific models
-  python scripts/run_evaluation.py --models "Claude 3 Sonnet,Llama 3 70B Instruct"
+  python scripts/run_evaluation.py --models "Claude 3.7 Sonnet,Llama 3.2 11B Instruct"
 
   # Use custom prompts file
   python scripts/run_evaluation.py --prompts data/my_prompts.csv --out data/my_runs

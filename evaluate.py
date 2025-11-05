@@ -8,7 +8,7 @@ from typing import List, Optional
 from prompt_loader import PromptLoader
 from model_evaluator import ModelEvaluator
 from results_aggregator import ResultsAggregator
-from config import MODELS, PROMPT_SETTINGS
+from config import MODELS, PROMPT_SETTINGS, AWS_REGION
 
 
 def main():
@@ -98,12 +98,34 @@ Examples:
             all_results.extend(results)
             summaries.append(summary)
         except Exception as e:
-            print(f"Error evaluating {model_key}: {e}")
+            error_msg = str(e)
+            print(f"\n❌ Error evaluating {model_key}: {error_msg}")
+            
+            # Special handling for Anthropic access errors
+            if "use case details" in error_msg.lower() or "ResourceNotFoundException" in error_msg:
+                print(f"\n⚠️  IMPORTANT: Anthropic model access not enabled!")
+                print(f"   To fix this, enable Anthropic models in AWS Bedrock:")
+                print(f"   https://console.aws.amazon.com/bedrock/home?region={AWS_REGION}#/modelaccess")
+                print(f"   See MANUAL_GUIDE.md section 'Issue 3.5' for step-by-step instructions.\n")
+            
             continue
     
     if not all_results:
         print("Error: No results collected")
         sys.exit(1)
+    
+    # Check for Anthropic access errors in results
+    anthropic_errors = []
+    for result in all_results:
+        if result.get("output", "").startswith("❌") and "use case details" in result.get("output", "").lower():
+            model_name = result.get("model_name", "Unknown")
+            if model_name not in [e["model"] for e in anthropic_errors]:
+                anthropic_errors.append({"model": model_name, "count": 1})
+            else:
+                for e in anthropic_errors:
+                    if e["model"] == model_name:
+                        e["count"] += 1
+                        break
     
     # Generate reports
     print("\nGenerating reports...")
@@ -121,6 +143,22 @@ Examples:
     print(f"  Detailed results: {detailed_file}")
     print(f"  Summary report: {summary_file}")
     print(f"  Comparison report: {comparison_file}")
+    
+    # Show Anthropic access error summary if any
+    if anthropic_errors:
+        print(f"\n{'='*80}")
+        print(f"⚠️  ANTHROPIC MODEL ACCESS ERROR DETECTED")
+        print(f"{'='*80}")
+        for error_info in anthropic_errors:
+            print(f"\n❌ {error_info['model']}: {error_info['count']} error(s) due to missing Anthropic access")
+        print(f"\n🔧 TO FIX THIS:")
+        print(f"   1. Go to: https://console.aws.amazon.com/bedrock/home?region={AWS_REGION}#/modelaccess")
+        print(f"   2. Find 'Anthropic' and click 'Request model access' or 'Enable'")
+        print(f"   3. Fill out the use case form and submit")
+        print(f"   4. Wait 5-15 minutes for approval")
+        print(f"   5. Re-run your evaluation")
+        print(f"\n📖 See FIX_ANTHROPIC_ACCESS.md for detailed step-by-step instructions")
+        print(f"{'='*80}\n")
 
 
 if __name__ == "__main__":
