@@ -776,14 +776,23 @@ with st.sidebar:
                                         continue
                                 
                                 if csv_prompts:
-                                    # Now extract individual questions from each CSV prompt
+                                    # Now extract individual questions from each CSV prompt, organized by prompt_id
                                     st.success(f"✅ Converted {len(csv_prompts)} NDJSON records to CSV format")
+                                    
+                                    # Store prompts organized by prompt_id
+                                    prompts_by_id = {}
                                     all_questions = []
                                     
                                     for csv_prompt in csv_prompts:
+                                        prompt_id = csv_prompt["prompt_id"]
                                         prompt_text = csv_prompt["prompt"]
+                                        expected_json = csv_prompt["expected_json"]
+                                        category = csv_prompt["category"]
+                                        
                                         # Extract questions from the "Questions:" section
                                         questions_text = _extract_questions_from_text(prompt_text)
+                                        questions_list = []
+                                        
                                         if questions_text:
                                             # Split into individual questions
                                             if "\n\nQ" in questions_text:
@@ -791,79 +800,119 @@ with st.sidebar:
                                                 for i, part in enumerate(question_parts):
                                                     if part.strip():
                                                         if i == 0 and not part.startswith("Q"):
-                                                            all_questions.append(part.strip())
+                                                            question = part.strip()
                                                         else:
-                                                            all_questions.append(f"Q{part.strip()}")
+                                                            question = f"Q{part.strip()}"
+                                                        questions_list.append(question)
+                                                        all_questions.append(question)
                                             else:
+                                                questions_list.append(questions_text)
                                                 all_questions.append(questions_text)
+                                        
+                                        # Store prompt with its questions
+                                        prompts_by_id[prompt_id] = {
+                                            "prompt_id": prompt_id,
+                                            "full_prompt": prompt_text,
+                                            "questions": questions_list,
+                                            "expected_json": expected_json,
+                                            "category": category
+                                        }
                                     
-                                    if all_questions:
+                                    if prompts_by_id:
+                                        # Store in session state
+                                        st.session_state.prompts_by_id = prompts_by_id
                                         st.session_state.uploaded_prompts = all_questions
-                                        st.success(f"✅ Extracted {len(all_questions)} individual questions from CSV prompts")
+                                        st.success(f"✅ Extracted {len(all_questions)} individual questions from {len(prompts_by_id)} prompts")
                                         
                                         # Initialize selected prompts if not exists
                                         if 'selected_uploaded_prompts' not in st.session_state:
                                             st.session_state.selected_uploaded_prompts = all_questions.copy()
                                         
-                                        # Show checkbox list for prompt selection
-                                        with st.expander("📋 Select Prompts to Test", expanded=True):
-                                            st.markdown(f"**Total prompts loaded:** {len(all_questions)}")
+                                        # Show checkbox list for prompt selection organized by prompt_id
+                                        with st.expander("📋 Select Prompts to Test (Organized by Prompt ID)", expanded=True):
+                                            st.markdown(f"**Total prompts:** {len(prompts_by_id)} | **Total questions:** {len(all_questions)}")
                                             
                                             # Select all / Deselect all buttons (stacked vertically)
-                                            if st.button("✅ Select All", key="select_all_ndjson", use_container_width=True):
-                                                st.session_state.selected_uploaded_prompts = all_questions.copy()
-                                                st.rerun()
-                                            if st.button("❌ Deselect All", key="deselect_all_ndjson", use_container_width=True):
-                                                st.session_state.selected_uploaded_prompts = []
-                                                st.rerun()
+                                            col1, col2 = st.columns(2)
+                                            with col1:
+                                                if st.button("✅ Select All", key="select_all_ndjson", use_container_width=True):
+                                                    st.session_state.selected_uploaded_prompts = all_questions.copy()
+                                                    st.rerun()
+                                            with col2:
+                                                if st.button("❌ Deselect All", key="deselect_all_ndjson", use_container_width=True):
+                                                    st.session_state.selected_uploaded_prompts = []
+                                                    st.rerun()
                                             
                                             st.markdown("---")
                                             
-                                            # Show checkboxes for each question
+                                            # Show prompts organized by prompt_id
                                             selected_prompts = []
-                                            for idx, question in enumerate(all_questions):
-                                                question_text = str(question).strip()
-                                                # Remove "Q1:", "Q2:" prefix if present for cleaner display
-                                                if question_text.startswith("Q") and ":" in question_text:
-                                                    display_text = question_text.split(":", 1)[1].strip()
-                                                else:
-                                                    display_text = question_text
+                                            for prompt_id in sorted(prompts_by_id.keys()):
+                                                prompt_data = prompts_by_id[prompt_id]
+                                                full_prompt = prompt_data["full_prompt"]
+                                                questions = prompt_data["questions"]
                                                 
-                                                if len(display_text) > 200:
-                                                    prompt_preview = display_text[:200] + "..."
-                                                else:
-                                                    prompt_preview = display_text
-                                                
-                                                prompt_preview = ' '.join(prompt_preview.split())
-                                                
-                                                if not prompt_preview or len(prompt_preview.strip()) < 5:
-                                                    prompt_preview = f"[Empty prompt {idx + 1}]"
-                                                
-                                                is_selected = st.checkbox(
-                                                    f"**Prompt {idx + 1}:** {prompt_preview}",
-                                                    value=question in st.session_state.selected_uploaded_prompts,
-                                                    key=f"ndjson_prompt_checkbox_{idx}",
-                                                    help=f"Full prompt: {question_text[:500] if len(question_text) > 500 else question_text}"
-                                                )
-                                                
-                                                if is_selected:
-                                                    selected_prompts.append(question)
+                                                # Create expander for each prompt_id
+                                                with st.expander(f"📄 **Prompt ID {prompt_id}** ({len(questions)} questions)", expanded=False):
+                                                    # Show full prompt preview
+                                                    st.markdown("**Full Prompt Preview:**")
+                                                    prompt_preview = full_prompt[:300] + "..." if len(full_prompt) > 300 else full_prompt
+                                                    st.text_area(
+                                                        "",
+                                                        value=prompt_preview,
+                                                        height=150,
+                                                        key=f"prompt_id_{prompt_id}_preview",
+                                                        disabled=True,
+                                                        label_visibility="collapsed"
+                                                    )
+                                                    
+                                                    st.markdown("---")
+                                                    st.markdown("**Questions:**")
+                                                    
+                                                    # Show checkboxes for each question in this prompt
+                                                    for q_idx, question in enumerate(questions):
+                                                        question_text = str(question).strip()
+                                                        # Remove "Q1:", "Q2:" prefix if present for cleaner display
+                                                        if question_text.startswith("Q") and ":" in question_text:
+                                                            display_text = question_text.split(":", 1)[1].strip()
+                                                        else:
+                                                            display_text = question_text
+                                                        
+                                                        if len(display_text) > 150:
+                                                            question_preview = display_text[:150] + "..."
+                                                        else:
+                                                            question_preview = display_text
+                                                        
+                                                        question_preview = ' '.join(question_preview.split())
+                                                        
+                                                        if not question_preview or len(question_preview.strip()) < 5:
+                                                            question_preview = f"[Empty question {q_idx + 1}]"
+                                                        
+                                                        is_selected = st.checkbox(
+                                                            f"**Q{q_idx + 1}:** {question_preview}",
+                                                            value=question in st.session_state.selected_uploaded_prompts,
+                                                            key=f"ndjson_prompt_{prompt_id}_question_{q_idx}",
+                                                            help=f"Full question: {question_text[:500] if len(question_text) > 500 else question_text}"
+                                                        )
+                                                        
+                                                        if is_selected:
+                                                            selected_prompts.append(question)
                                             
                                             st.session_state.selected_uploaded_prompts = selected_prompts
                                             
                                             st.markdown("---")
-                                            st.info(f"**Selected:** {len(selected_prompts)} / {len(all_questions)} prompts")
+                                            st.info(f"**Selected:** {len(selected_prompts)} / {len(all_questions)} questions")
                                             if len(selected_prompts) > 0 and len(selected_prompts) <= 5:
-                                                st.caption("**Selected prompts:**")
+                                                st.caption("**Selected questions:**")
                                                 for i, prompt in enumerate(selected_prompts, 1):
                                                     preview = str(prompt).strip()[:100] + "..." if len(str(prompt)) > 100 else str(prompt)
                                                     st.caption(f"{i}. {preview}")
                                             elif len(selected_prompts) > 5:
-                                                st.caption("**First 5 selected prompts:**")
+                                                st.caption("**First 5 selected questions:**")
                                                 for i, prompt in enumerate(selected_prompts[:5], 1):
                                                     preview = str(prompt).strip()[:100] + "..." if len(str(prompt)) > 100 else str(prompt)
                                                     st.caption(f"{i}. {preview}")
-                                                st.caption(f"... and {len(selected_prompts) - 5} more prompts")
+                                                st.caption(f"... and {len(selected_prompts) - 5} more questions")
                                     else:
                                         st.warning("⚠️ No questions found in the converted CSV prompts. Displaying full prompts instead.")
                                         # Fall back to showing full prompts
@@ -1173,7 +1222,22 @@ def load_data(raw_path: str, agg_path: str, cache_key: int = 0):
     
     try:
         if Path(raw_path).exists():
-            raw_df = pd.read_csv(raw_path)
+            # Read CSV with proper handling of multi-line fields
+            try:
+                raw_df = pd.read_csv(
+                    raw_path,
+                    quoting=1,  # QUOTE_ALL
+                    escapechar=None,
+                    doublequote=True,
+                    on_bad_lines='skip',  # Skip problematic lines instead of failing
+                    engine='python'  # Use Python engine which is more lenient
+                )
+            except Exception:
+                # If that fails, try with default settings
+                try:
+                    raw_df = pd.read_csv(raw_path, on_bad_lines='skip', engine='python')
+                except Exception:
+                    raw_df = pd.DataFrame()
         else:
             pass  # Don't show warning in main sidebar - let it show in sidebar
     except Exception as e:
@@ -1181,7 +1245,20 @@ def load_data(raw_path: str, agg_path: str, cache_key: int = 0):
     
     try:
         if Path(agg_path).exists():
-            agg_df = pd.read_csv(agg_path)
+            try:
+                agg_df = pd.read_csv(
+                    agg_path,
+                    quoting=1,
+                    escapechar=None,
+                    doublequote=True,
+                    on_bad_lines='skip',
+                    engine='python'
+                )
+            except Exception:
+                try:
+                    agg_df = pd.read_csv(agg_path, on_bad_lines='skip', engine='python')
+                except Exception:
+                    agg_df = pd.DataFrame()
         else:
             pass
     except Exception as e:
@@ -1428,8 +1505,10 @@ with tab1:
                 display_df['status'] = display_df['status'].apply(lambda x: "✅ Success" if x == "success" else "❌ Error")
             
             st.dataframe(display_df, use_container_width=True, height=200)
-            
-            # Display JSON Output Responses
+        
+        # Display JSON Output Responses - moved outside expander to avoid nesting
+        if st.session_state.get('evaluation_results'):
+            results = st.session_state.evaluation_results
             st.subheader("📄 Output JSON Responses")
             for idx, result in enumerate(results):
                 model_name = result.get('model_name', 'Unknown')
@@ -1476,15 +1555,16 @@ with tab1:
                             st.markdown("**Response (Text Format):**")
                             st.code(response, language='text')
                         
-                        # Show raw response option
-                        with st.expander("📋 View Raw Output Response", expanded=False):
-                            st.text_area(
-                                "Full Output Response Text",
-                                value=response,
-                                height=200,
-                                key=f"raw_response_{idx}",
-                                disabled=True
-                            )
+                        # Show raw response option - use text_area instead of nested expander
+                        st.markdown("**📋 Full Raw Output Response:**")
+                        st.text_area(
+                            "Full Output Response Text",
+                            value=response,
+                            height=200,
+                            key=f"raw_response_{idx}",
+                            disabled=True,
+                            label_visibility="collapsed"
+                        )
                     elif status == 'error':
                         st.markdown("### 📤 Output Response/JSON")
                         st.error(f"**Error:** {error if error else 'Unknown error occurred'}")
