@@ -103,18 +103,26 @@ class BedrockEvaluator:
             metrics["response"] = response_text  # Store full response
             
             # Always validate JSON to provide useful information
-            # Try to extract/clean JSON from response (handles markdown code blocks, etc.)
-            is_valid, cleaned_json = self._validate_json_with_cleaning(response_text)
-            if expected_json:
-                # If JSON was expected, use the validation result directly
-                metrics["json_valid"] = is_valid
-                # Store cleaned JSON if available for better display
-                if is_valid and cleaned_json:
-                    metrics["cleaned_response"] = cleaned_json
+            # Check if response is empty first
+            if not response_text or not response_text.strip() or output_tokens_actual == 0:
+                # No response generated - cannot validate JSON
+                if expected_json:
+                    metrics["json_valid"] = False  # Expected JSON but got empty response
+                else:
+                    metrics["json_valid"] = None  # Not applicable - no response
             else:
-                # If JSON wasn't expected, always validate but use None to indicate "not applicable"
-                # This way we still show useful info (if response happens to be valid JSON)
-                metrics["json_valid"] = None  # None = not checked/not applicable
+                # Try to extract/clean JSON from response (handles markdown code blocks, etc.)
+                is_valid, cleaned_json = self._validate_json_with_cleaning(response_text)
+                if expected_json:
+                    # If JSON was expected, use the validation result directly
+                    metrics["json_valid"] = is_valid
+                    # Store cleaned JSON if available for better display
+                    if is_valid and cleaned_json:
+                        metrics["cleaned_response"] = cleaned_json
+                else:
+                    # If JSON wasn't expected, always validate but use None to indicate "not applicable"
+                    # This way we still show useful info (if response happens to be valid JSON)
+                    metrics["json_valid"] = None  # None = not checked/not applicable
             
             # Calculate costs using actual token counts from API
             pricing = self.model_registry.get_model_pricing(model)
