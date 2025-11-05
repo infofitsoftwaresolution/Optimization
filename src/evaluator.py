@@ -409,11 +409,19 @@ class BedrockEvaluator:
         try:
             # Prepare request body based on provider
             if provider == "meta" or "llama" in model_id.lower():
-                # Meta Llama models - don't include stop sequences in the request
-                # as they might cause premature stopping
-                # The model will use its default stop sequences
+                # Meta Llama models - format prompt for Llama Instruct models
+                # Llama Instruct models expect a specific chat format
+                # For Llama 3.1/3.2, we need to use the chat template format
+                formatted_prompt = prompt
+                
+                # If the prompt doesn't already have the chat format, add it
+                # Llama 3.1/3.2 Instruct models use: <|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n{prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n
+                if not prompt.strip().startswith("<|begin_of_text|>") and "instruct" in model_id.lower():
+                    # Format as Llama chat prompt
+                    formatted_prompt = f"<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n{prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+                
                 body = json.dumps({
-                    "prompt": prompt,
+                    "prompt": formatted_prompt,
                     "max_gen_len": gen_params.get("max_tokens", 512),
                     "temperature": gen_params.get("temperature", 0.2),
                     "top_p": gen_params.get("top_p", 0.9)
