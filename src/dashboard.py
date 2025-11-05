@@ -1139,11 +1139,29 @@ with st.sidebar:
     
     # Input Summary in Sidebar
     prompts_to_use = []
+    prompts_with_metadata = []  # Store prompts with their metadata
+    
     if user_prompt.strip():
         prompts_to_use.append(user_prompt)
+        prompts_with_metadata.append({
+            "prompt": user_prompt,
+            "expected_json": st.session_state.get('expect_json_sidebar', True),
+            "source": "custom"
+        })
+    
     # Use selected prompts from uploaded file (if any)
     if st.session_state.get('selected_uploaded_prompts'):
-        prompts_to_use.extend(st.session_state.selected_uploaded_prompts)
+        prompt_metadata = st.session_state.get('prompt_metadata', {})
+        for prompt in st.session_state.selected_uploaded_prompts:
+            prompts_to_use.append(prompt)
+            # Get metadata for this prompt if available
+            metadata = prompt_metadata.get(prompt, {})
+            prompts_with_metadata.append({
+                "prompt": prompt,
+                "expected_json": metadata.get("expected_json", st.session_state.get('expect_json_sidebar', True)),
+                "source": "uploaded",
+                "prompt_id": metadata.get("prompt_id")
+            })
     
     if prompts_to_use:
         custom_count = 1 if user_prompt.strip() else 0
