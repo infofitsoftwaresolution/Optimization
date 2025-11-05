@@ -112,13 +112,53 @@ class BedrockEvaluator:
                     metrics["json_valid"] = None  # Not applicable - no response
             else:
                 # Try to extract/clean JSON from response (handles markdown code blocks, etc.)
+                # Store original response for debugging
+                original_response = response_text
                 is_valid, cleaned_json = self._validate_json_with_cleaning(response_text)
+                
+                # If validation failed and JSON was expected, try once more with more aggressive cleaning
+                if not is_valid and expected_json:
+                    # Try removing common prefixes/suffixes that models sometimes add
+                    cleaned_response = response_text.strip()
+                    # Remove common prefixes
+                    prefixes_to_remove = [
+                        "Here's the JSON:",
+                        "Here is the JSON:",
+                        "The JSON response is:",
+                        "JSON:",
+                        "```json",
+                        "```",
+                    ]
+                    for prefix in prefixes_to_remove:
+                        if cleaned_response.lower().startswith(prefix.lower()):
+                            cleaned_response = cleaned_response[len(prefix):].strip()
+                            # Remove leading colon if present
+                            if cleaned_response.startswith(':'):
+                                cleaned_response = cleaned_response[1:].strip()
+                    
+                    # Remove common suffixes
+                    suffixes_to_remove = [
+                        "```",
+                        "Hope this helps!",
+                        "Let me know if you need anything else.",
+                    ]
+                    for suffix in suffixes_to_remove:
+                        if cleaned_response.lower().endswith(suffix.lower()):
+                            cleaned_response = cleaned_response[:-len(suffix)].strip()
+                    
+                    # Try validation again with cleaned response
+                    if cleaned_response != response_text:
+                        is_valid, cleaned_json = self._validate_json_with_cleaning(cleaned_response)
+                
                 if expected_json:
                     # If JSON was expected, use the validation result directly
                     metrics["json_valid"] = is_valid
                     # Store cleaned JSON if available for better display
                     if is_valid and cleaned_json:
                         metrics["cleaned_response"] = cleaned_json
+                    # Store original response for debugging if validation failed
+                    elif not is_valid:
+                        metrics["original_response"] = original_response[:500]  # First 500 chars for debugging
                 else:
                     # If JSON wasn't expected, still validate and show result
                     # This helps users see if their response happens to be valid JSON
