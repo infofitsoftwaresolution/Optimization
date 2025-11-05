@@ -710,10 +710,17 @@ class BedrockEvaluator:
         
         # Additional fallback: Try regex to find JSON-like structures
         # Look for arrays or objects that might be valid JSON
+        # Use non-greedy matching first, then try greedy
         json_patterns = [
-            r'\[[\s\S]*?\]',  # Array pattern
-            r'\{[\s\S]*?\}',  # Object pattern
+            r'\[[\s\S]*?\]',  # Array pattern (non-greedy)
+            r'\{[\s\S]*?\}',  # Object pattern (non-greedy)
+            r'\[[\s\S]+\]',  # Array pattern (greedy)
+            r'\{[\s\S]+\}',  # Object pattern (greedy)
         ]
+        
+        # Try to find the longest valid JSON match
+        best_match = None
+        best_match_len = 0
         
         for pattern in json_patterns:
             matches = re.finditer(pattern, text, re.DOTALL)
@@ -721,8 +728,42 @@ class BedrockEvaluator:
                 json_candidate = match.group(0)
                 try:
                     json.loads(json_candidate)
-                    return True, json_candidate
+                    # Prefer longer matches (more complete JSON)
+                    if len(json_candidate) > best_match_len:
+                        best_match = json_candidate
+                        best_match_len = len(json_candidate)
                 except (json.JSONDecodeError, TypeError):
                     continue
+        
+        if best_match:
+            return True, best_match
+        
+        # Final attempt: Try to extract JSON by finding the first [ or { and the last ] or }
+        # This handles cases where there's explanatory text before/after
+        first_bracket = text.find('[')
+        first_brace = text.find('{')
+        
+        # Find the earliest bracket
+        if first_bracket >= 0 and (first_brace < 0 or first_bracket < first_brace):
+            # Look for array
+            last_bracket = text.rfind(']')
+            if last_bracket > first_bracket:
+                candidate = text[first_bracket:last_bracket+1]
+                try:
+                    json.loads(candidate)
+                    return True, candidate
+                except (json.JSONDecodeError, TypeError):
+                    pass
+        
+        if first_brace >= 0:
+            # Look for object
+            last_brace = text.rfind('}')
+            if last_brace > first_brace:
+                candidate = text[first_brace:last_brace+1]
+                try:
+                    json.loads(candidate)
+                    return True, candidate
+                except (json.JSONDecodeError, TypeError):
+                    pass
         
         return False, None
