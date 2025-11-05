@@ -507,21 +507,34 @@ class BedrockEvaluator:
                     response_text = str(response_text) if response_text else ""
                 
                 # Check for token usage in Meta Llama response
-                # Meta models may return: usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
+                # Meta Llama returns: prompt_token_count, generation_token_count
+                generation_token_count = response_body.get("generation_token_count", 0)
+                prompt_token_count = response_body.get("prompt_token_count", 0)
+                
+                # Also check usage object if present
                 usage = response_body.get("usage", {})
                 output_tokens = (
+                    generation_token_count or
                     usage.get("completion_tokens") or 
                     usage.get("generation_tokens") or 
                     usage.get("output_tokens") or 0
                 )
                 
+                # If generation_token_count > 0 but response_text is empty, 
+                # the model might have generated only a stop token or whitespace
+                if generation_token_count > 0 and not response_text.strip():
+                    # Check stop_reason to understand why
+                    stop_reason = response_body.get("stop_reason", "unknown")
+                    response_text = f"[WARNING: Model generated {generation_token_count} token(s) but output is empty. Stop reason: {stop_reason}. This may indicate the model hit a stop sequence immediately or generated only whitespace.]"
                 # If output_tokens is 0 but we have response_text, estimate tokens
-                if output_tokens == 0 and response_text:
+                elif output_tokens == 0 and response_text:
                     output_tokens = count_tokens(tokenizer_type, response_text)
+                # If we have generation_token_count but no response_text, use it for output_tokens
+                elif output_tokens == 0 and generation_token_count > 0:
+                    output_tokens = generation_token_count
                 
-                # If still no response, this might indicate an API issue
-                # Store the response body for debugging
-                if not response_text:
+                # If still no response and no tokens, this might indicate an API issue
+                if not response_text and output_tokens == 0:
                     # Log the response structure for debugging (first 1000 chars)
                     debug_info = json.dumps(response_body, indent=2)[:1000]
                     response_text = f"[DEBUG: No generation found. Response keys: {response_keys}. Response body: {debug_info}]"
