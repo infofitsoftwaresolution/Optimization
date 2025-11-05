@@ -409,11 +409,15 @@ class BedrockEvaluator:
         try:
             # Prepare request body based on provider
             if provider == "meta" or "llama" in model_id.lower():
+                # Meta Llama models - don't include stop sequences in the request
+                # as they might cause premature stopping
+                # The model will use its default stop sequences
                 body = json.dumps({
                     "prompt": prompt,
                     "max_gen_len": gen_params.get("max_tokens", 512),
                     "temperature": gen_params.get("temperature", 0.2),
                     "top_p": gen_params.get("top_p", 0.9)
+                    # Note: Not adding stop sequences here as they may cause empty responses
                 })
             elif provider == "amazon" or "titan" in model_id.lower():
                 body = json.dumps({
