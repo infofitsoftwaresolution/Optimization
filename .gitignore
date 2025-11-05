@@ -47,6 +47,9 @@ data/*.json
 data/*.csv
 !data/runs/.gitkeep
 
+# Results directory (command-line evaluation outputs)
+results/
+
 # Logs
 *.log
 logs/
