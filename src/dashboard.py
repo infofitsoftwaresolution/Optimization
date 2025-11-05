@@ -752,11 +752,15 @@ with st.sidebar:
                                         if not extracted_prompt:
                                             continue
                                         
-                                        # Detect if JSON is expected
+                                        # Detect if JSON is expected - check multiple patterns
+                                        extracted_lower = extracted_prompt.lower()
                                         expected_json = (
-                                            "json" in extracted_prompt.lower() or
-                                            "return the result in a json" in extracted_prompt.lower() or
-                                            "formatted as follows:" in extracted_prompt.lower()
+                                            "json" in extracted_lower or
+                                            "return the result in a json" in extracted_lower or
+                                            "return the result in a json array" in extracted_lower or
+                                            "formatted as follows:" in extracted_lower or
+                                            "formatted as follows" in extracted_lower or
+                                            "return" in extracted_lower and "json" in extracted_lower and "array" in extracted_lower
                                         )
                                         
                                         # Extract category
@@ -864,6 +868,18 @@ with st.sidebar:
                                                         }
                                             
                                             st.session_state.selected_uploaded_prompts = selected_prompts
+                                            
+                                            # Store ALL prompt metadata (not just selected ones) for later use
+                                            if 'prompt_metadata' not in st.session_state:
+                                                st.session_state.prompt_metadata = {}
+                                            # Update metadata for all prompts in prompts_by_id
+                                            for pid, pdata in prompts_by_id.items():
+                                                full_prompt_text = pdata["full_prompt"]
+                                                st.session_state.prompt_metadata[full_prompt_text] = {
+                                                    "prompt_id": pdata["prompt_id"],
+                                                    "expected_json": pdata["expected_json"],
+                                                    "category": pdata["category"]
+                                                }
                                             
                                             st.markdown("---")
                                             st.info(f"**Selected:** {len(selected_prompts)} / {len(prompts_by_id)} prompts")
