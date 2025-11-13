@@ -73,6 +73,7 @@ config.override.py
 test_*.py
 *_test.py
 !verify_setup.py
+!test_fresh_clone.py
 
 # Temporary files
 *.tmp
