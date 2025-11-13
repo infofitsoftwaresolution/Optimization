@@ -72,6 +72,7 @@ config.override.py
 # Test files
 test_*.py
 *_test.py
+!verify_setup.py
 
 # Temporary files
 *.tmp
