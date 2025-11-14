@@ -225,10 +225,7 @@ def print_next_steps(project_root):
         print("     source .venv/bin/activate")
         print("     streamlit run src/dashboard.py")
     print("\n4. Open your browser to: http://localhost:8501")
-    print("\n📖 For more help, see:")
-    print("   - QUICK_START.md (5-minute guide)")
-    print("   - README.md (full documentation)")
-    print("   - MANUAL_RUN_GUIDE.md (detailed instructions)")
+    print("\n📖 For more help, see README.md for full documentation")
     print("\n" + "="*60)
 
 def main():
@@ -268,18 +265,19 @@ def main():
     
     # Step 6: Install dependencies
     print_step(6, "Installing Dependencies")
-    install_deps = input("\n📦 Install dependencies now? (y/n, default: y): ").strip().lower()
-    if install_deps != 'n':
-        if not install_dependencies(project_root):
-            print("⚠️  Warning: Could not install dependencies automatically.")
-            print("   Please run manually: pip install -r requirements.txt")
+    print("📦 Installing dependencies automatically...")
+    if not install_dependencies(project_root):
+        print("⚠️  Warning: Could not install dependencies automatically.")
+        print("   Please run manually:")
+        if sys.platform == "win32":
+            print("   .venv\\Scripts\\activate")
         else:
-            # Step 7: Verify installation
-            print_step(7, "Verifying Installation")
-            verify_installation(project_root)
+            print("   source .venv/bin/activate")
+        print("   pip install -r requirements.txt")
     else:
-        print("⏭️  Skipping dependency installation.")
-        print("   Remember to run: pip install -r requirements.txt")
+        # Step 7: Verify installation
+        print_step(7, "Verifying Installation")
+        verify_installation(project_root)
     
     # Print next steps
     print_next_steps(project_root)
