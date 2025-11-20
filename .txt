@@ -1,0 +1,141 @@
+Given the following Progress Note, answer the questions below.
+
+## Questions to Answer
+<questions>
+[{\"Question\":\"If anything other than NA was selected in the Suicide care interventions section, did the note include documentation to support what was selected?\",\"LinkId\":\"01KAFEYEN2TK0SAGPEBWF1XBF5\"},{\"Question\":\"If Yes was selected under \\\"Did this intervention occur as part of the client's ongoing suicide care pathway\\\" section, were resources, including the 24/7 hotline, provided?\",\"LinkId\":\"01KAFEYEN2YT16P07P2R6QAR8T\"},{\"Question\":\"If Yes was selected under \\\"Did this intervention occur as part of the client's ongoing suicide care pathway\\\" section, was a follow-up appointment included in the Plan/Future Actions section?\",\"LinkId\":\"01KAFEYEN2W8J2MG45P6D8Q86F\"},{\"Question\":\"If Yes was selected under \\\"Did this intervention occur as part of the client's ongoing suicide care pathway \\\"section, was the individuals overall suicide risk described?\",\"LinkId\":\"01KAFEYEN2WJQK2CNQJ5R8X9S7\"},{\"Question\":\"If Yes was selected under \\\"Was education regarding the suicide care pathway (e.g., flyer or verbale explanation) provided during this encounter\\\" section, did the documentation support that selection?\",\"LinkId\":\"01KAFEYEN28YS8DTJ98W5H9NZE\"},{\"Question\":\"If Yes was selected under \\\"Did this intervention occur as part of the client's ongoing suicide care pathway\\\" section, was the safety plan discussed?\",\"LinkId\":\"01KAFEYEN2Y7W7Q2YC4KAWVYT9\"},{\"Question\":\"If Yes was selected under \\\"Did this intervention occur as part of the client's ongoing suicide care pathway\\\" section, was there documentation of means restriction?\",\"LinkId\":\"01KAFEYEN2FP3FBR1SQ3WRRXGC\"},{\"Question\":\"If Yes was selected under \\\"Was a caring contact card sent? (e.g. when a client misses an appointment, declines care, or anytime when clinically appropriate\\\" section, did the documentation support that selection?\",\"LinkId\":\"01KAFEYEN20VHTPAV3V4PSP2AQ\"}]
+</questions>
+
+## Progress Note
+<progress_note>
+Integral Care
+
+Date Created
+:   11/19/2025 7:15\u202fPM
+
+Form Name
+:   GIRPP Progress Note (CWSPN22005)
+
+Individual's Name
+:   CAZEY, RACHELLE (5253315)
+
+Individual's DOB
+:   03/12/1967
+
+Integral Care
+
+Travis County
+
+Texas
+
+Bells Notes
+
+Individual
+:   Name
+    :   RACHELLE CAZEY
+
+    MRN
+    :   5253315
+
+    Age
+    :   58y
+
+    Gender
+    :   Female
+
+    DOB
+    :   03/12/1967
+
+Practitioner
+:   DANY NGASSA
+
+Location
+:   Consumer's Home (12)
+
+Service Charge Code
+:   Psych Rehab Coord Svcs - Indiv (1254)
+
+Service Program
+:   4624-Travis Co ACT Expansion-LOC 4 (4624)
+
+myAvatar Note Type
+:   Adult Behavioral Health
+
+Draft/Final
+:   Final
+
+Progress Note For
+:   New Service
+
+Visit Date/Time
+:   11/19/2025 2:17\u202fPM - 2:45\u202fPM
+
+GIRPP Progress Note (CWSPN22005)Visit Time
+
+* Service Start  2:17\u202fPM  Service Stop  2:45\u202fPM  Service Duration 28  
+
+Treatment Plan
+
+* Schizoaffective disorder, bipolar type (F25.0). Shelly's most recent Positive/Negative Scales (10/2/25) were 22 and 8, respectively, with a high positive score due to AVH.
+  * \\[Active] - \"I want to establish care with a prescriber to ensure that I am managing my sadness and psychosis and improve my socialization skills\"
+    * \\[Active] - In the next 90 days, Shelly will identify strategies that she can use daily in order to better manage her symptoms of paranoia and social anxiety and \"stress and worry\". Progress will be measured by Shelly's self-report and ACT Team observation.
+      * \\[Active] - Service Coordination - Service Charge Code: 1254 
+        Possible Provider Credentials: PEERPROV, QMHP-CS, QMHP-R, LPHA, CSSP   
+        462, loc 4 act expansion team will provide intervention in person, through synchronous audio-visual technology or through synchronous audio only telephone technology will include the assessment of needs and strengths, treatment planning, identifying and accessing supports, and the coordination of services and advocacy.  
+
+
+QMHP Dany met with Rachelle \"Shelley\" to work on her ID application
+
+GIRPP Progress Note
+
+Title of Curriculum Used: imr
+
+IMR Curriculum: topic 10: getting your needs met by the mental health system
+
+GIRPP Note Narratives
+
+Intervention: QMHP Dany met with RACHELLE face-to-face at her residence to provide Psych Rehabilitation service coordination utilizing IMR topic 10. The QMHP Dany actively listened to RACHELLE and provided emotional support. QMHP Dany also attempted to create a Texas by Texas account as she stated that she has a driver's license; however, was unable to finalize the account creation due to the missing audit number. QMHP Dany additionally attempted to schedule an appointment for her ID, but RACHELLE was in a rush, stated that she wanted to sleep, and appeared tired.
+
+Response: RACHELLE's appearance was appropriate, and her hygiene was fair. She appeared to be very tired and stated, \"I'm tired, I went to the meet from 12 to 1.\" RACHELLE reported that her mother had not mailed back the Release of Information (ROI) letter. She did not show any motivation for the visit; however, she was participating by providing her Social Security Number and Driver's License number to create her Texas Benefits account. Unfortunately, the account creation was incomplete due to the missing Audit number, which is required along with either the DL or ID. While attempting to schedule an appointment for her ID, she asked, \"How long will it take? Can we do it another day?\" RACHELLE reported feeling very tired and wanting to sleep. She also expressed a craving for smoking cigarettes, stating, \"I want to smoke.\" She decided to end the visit as she needed to rest.
+
+Progress: Shelley has made progress by accepting to visit with us. 
+
+Referrals: Not at this time.
+
+Plan/Future Actions: ACT team will continue to follow up with RACHELLE by assisting her in scheduling her identification appointment and checking on her Snap benefits.
+
+Crisis Indicator: routine
+
+Recipient Code: consumer
+
+Encounter Type: face to face
+
+Appointment Type: unscheduled services
+
+COPSD: no
+
+Collateral Contact Made: n/a
+
+Additional Details
+
+What language was the service provided in?: english
+
+Did this intervention occur as part of the client's ongoing suicide care pathway?: n/a
+
+Suicide care interventions (can be provided to any client regardless of pathway enrollment status) : na
+
+Was a caring contact card sent? (e.g. when a client misses an appointment, declines care, or anytime when clinically appropriate.): n/a
+
+Was education regarding the suicide care pathway (e.g., flyer or verbale explanation) provided during this encounter?: n/a
+
+Clinical Quality Indicator
+
+* S1 Not Applicable 
+
+:   Electronically Signed by: DANY NGASSA, QMHP - CS on 11/19/2025 7:44\u202fPM
+
+</progress_note>
+
+## Additional Information:
+<additional_information>
+
+</additional_information>
