@@ -33,9 +33,21 @@ similarity_calculator = SimilarityCalculator()
 import tempfile
 import os
 
+# Import authentication modules
+from src.auth import is_authenticated, get_current_user, sign_out
+from src.auth_ui import render_sign_in_page, render_sign_up_page
+
 # Initialize the rerun counter for checkbox interactions
 if "checkbox_rerun_counter" not in st.session_state:
     st.session_state.checkbox_rerun_counter = 0
+
+# Initialize authentication state
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+if "username" not in st.session_state:
+    st.session_state.username = None
+if "page" not in st.session_state:
+    st.session_state.page = "signin"  # Default to sign-in page
 
 
 def extract_full_prompt_text(item: dict) -> str:
@@ -411,13 +423,41 @@ def _format_questions_from_array(questions_array: list) -> str:
     
     return ""
 
-# Page configuration
-st.set_page_config(
-    page_title="BellaTrix - Enterprise LLM Analytics",
-    page_icon="",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# Page configuration (must be called before any other streamlit commands)
+if not is_authenticated():
+    # Set page config for auth pages
+    if st.session_state.page == "signup":
+        st.set_page_config(
+            page_title="Sign Up - BellaTrix",
+            page_icon="📝",
+            layout="centered"
+        )
+    else:
+        st.set_page_config(
+            page_title="Sign In - BellaTrix",
+            page_icon="🔐",
+            layout="centered"
+        )
+else:
+    # Set page config for dashboard
+    st.set_page_config(
+        page_title="BellaTrix - Enterprise LLM Analytics",
+        page_icon="",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
+
+# Initialize page state if not set (default to signin)
+if "page" not in st.session_state:
+    st.session_state.page = "signin"
+
+# Authentication check - show sign-in/sign-up pages if not authenticated
+if not is_authenticated():
+    if st.session_state.page == "signup":
+        render_sign_up_page()
+    else:
+        render_sign_in_page()
+    st.stop()  # Stop execution here if not authenticated
 
 # Premium CSS Styling
 st.markdown("""
@@ -623,6 +663,24 @@ agg_path = str(project_root / "data" / "runs" / "model_comparison.csv")
 
 # Premium Sidebar
 with st.sidebar:
+    # User info and sign-out section
+    current_user = get_current_user()
+    if current_user:
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                    padding: 1rem; 
+                    border-radius: 10px; 
+                    margin-bottom: 1.5rem; 
+                    text-align: center;
+                    color: white;">
+            <p style="margin: 0; font-size: 0.9rem; opacity: 0.9;">Signed in as</p>
+            <p style="margin: 0.25rem 0 0 0; font-size: 1.1rem; font-weight: 600;">{current_user}</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if st.button("🚪 Sign Out", use_container_width=True, key="signout_button"):
+            sign_out()
+    
     st.markdown("""
     <div style="text-align: center; margin-bottom: 2rem;">
         <h2 style="color: #667eea; margin-bottom: 0.5rem;">⚙️ Control Panel</h2>
