@@ -8,10 +8,8 @@ User=ec2-user
 Group=ec2-user
 WorkingDirectory=/home/ec2-user/Optimization
 Environment=PATH=/home/ec2-user/Optimization/.venv/bin:/home/ec2-user/.local/bin:/usr/local/bin:/usr/bin:/bin
-# Load environment variables from GitHub Secrets
-EnvironmentFile=-/home/ec2-user/Optimization/.env
-ExecStartPre=/bin/bash -c 'source /home/ec2-user/Optimization/scripts/load-github-secrets.sh'
-ExecStart=/bin/bash -c 'source /home/ec2-user/Optimization/scripts/load-github-secrets.sh && /home/ec2-user/Optimization/.venv/bin/streamlit run src/dashboard.py --server.port 8501 --server.address 0.0.0.0 --server.headless true --server.runOnSave true --browser.gatherUsageStats false'
+# Use wrapper script that loads GitHub Secrets
+ExecStart=/home/ec2-user/Optimization/scripts/start-streamlit-with-secrets.sh
 Restart=always
 RestartSec=10
 StandardOutput=journal
