@@ -38,7 +38,7 @@ for i in {1..10}; do
     if curl -f -s --max-time 5 http://localhost:8501/ > /dev/null; then
         echo " Health check passed - App is responding"
         echo " Deployment completed successfully!"
-        echo "🌐 App is live at: http://3.111.36.145"
+        echo "🌐 App is live at: http://43.204.142.218"
         exit 0
     fi
     echo "   Health check attempt $i/10 failed, retrying..."
