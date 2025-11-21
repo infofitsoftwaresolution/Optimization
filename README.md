@@ -175,7 +175,42 @@ If you prefer to set up manually:
 
 ### AWS Credentials
 
-**Option 1: Using .env file (Recommended)**
+**Option 1: Using GitHub Secrets (Recommended for Team/EC2 Deployment)**
+
+If you're deploying on EC2 or working with a team, use GitHub Secrets to securely store credentials:
+
+1. **Add secrets to GitHub:**
+   - Go to your repository → Settings → Secrets and variables → Actions
+   - Add these secrets:
+     - `AWS_ACCESS_KEY_ID`
+     - `AWS_SECRET_ACCESS_KEY`
+     - `AWS_REGION`
+     - `DB_HOST`
+     - `DB_PORT`
+     - `DB_NAME`
+     - `DB_USER`
+     - `DB_PASSWORD`
+     - `OPENAI_API_KEY` (optional)
+
+2. **On EC2, run the setup script:**
+   ```bash
+   # Linux/Mac
+   chmod +x scripts/setup-from-github-secrets.sh
+   ./scripts/setup-from-github-secrets.sh
+   
+   # Windows PowerShell
+   .\scripts\setup-from-github-secrets.ps1
+   ```
+
+   This script will:
+   - Install GitHub CLI if needed
+   - Authenticate with GitHub
+   - Download all secrets
+   - Create a `.env` file automatically
+
+📖 **See [GITHUB_SECRETS_SETUP.md](GITHUB_SECRETS_SETUP.md) for detailed step-by-step instructions.**
+
+**Option 2: Using .env file (Local Development)**
 
 The setup script automatically creates a `.env` file from `.env.example`. If you need to create it manually:
 
@@ -193,10 +228,15 @@ The setup script automatically creates a `.env` file from `.env.example`. If you
    AWS_ACCESS_KEY_ID=your_access_key_here
    AWS_SECRET_ACCESS_KEY=your_secret_key_here
    AWS_REGION=us-east-2
+   DB_HOST=your_db_host_here
+   DB_PORT=5432
+   DB_NAME=bellatrix_db
+   DB_USER=postgres
+   DB_PASSWORD=your_db_password_here
    OPENAI_API_KEY=your_openai_key_here  # Optional
    ```
 
-**Option 2: Using AWS CLI**
+**Option 3: Using AWS CLI**
 
 ```bash
 aws configure
