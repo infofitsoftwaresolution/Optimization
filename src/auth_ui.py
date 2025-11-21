@@ -50,11 +50,7 @@ def render_sign_in_page():
             username = st.text_input("Username", placeholder="Enter your username")
             password = st.text_input("Password", type="password", placeholder="Enter your password")
             
-            col_btn1, col_btn2 = st.columns(2)
-            with col_btn1:
-                submit_button = st.form_submit_button("Sign In", use_container_width=True)
-            with col_btn2:
-                switch_to_signup = st.form_submit_button("Sign Up", use_container_width=True)
+            submit_button = st.form_submit_button("Sign In", use_container_width=True)
             
             if submit_button:
                 success, message = sign_in(username, password)
@@ -65,13 +61,16 @@ def render_sign_in_page():
                     st.rerun()
                 else:
                     st.error(message)
-            
-            if switch_to_signup:
-                st.session_state.page = 'signup'
-                st.rerun()
         
         st.markdown("---")
-        st.markdown('<p style="text-align: center; color: #666;">Don\'t have an account? Click "Sign Up" above</p>', unsafe_allow_html=True)
+        st.markdown('<p style="text-align: center; color: #666;">Don\'t have an account?</p>', unsafe_allow_html=True)
+        
+        # Sign Up button outside the form for better reliability
+        col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
+        with col_btn2:
+            if st.button("📝 Create New Account", use_container_width=True, type="primary"):
+                st.session_state.page = 'signup'
+                st.rerun()
 
 
 def render_sign_up_page():
@@ -122,11 +121,7 @@ def render_sign_up_page():
             password = st.text_input("Password", type="password", placeholder="Create a password (min 6 characters)")
             confirm_password = st.text_input("Confirm Password", type="password", placeholder="Confirm your password")
             
-            col_btn1, col_btn2 = st.columns(2)
-            with col_btn1:
-                submit_button = st.form_submit_button("Sign Up", use_container_width=True)
-            with col_btn2:
-                switch_to_signin = st.form_submit_button("Sign In", use_container_width=True)
+            submit_button = st.form_submit_button("Sign Up", use_container_width=True, type="primary")
             
             if submit_button:
                 # Validate passwords match
@@ -141,11 +136,14 @@ def render_sign_up_page():
                         st.rerun()
                     else:
                         st.error(message)
-            
-            if switch_to_signin:
-                st.session_state.page = 'signin'
-                st.rerun()
         
         st.markdown("---")
-        st.markdown('<p style="text-align: center; color: #666;">Already have an account? Click "Sign In" above</p>', unsafe_allow_html=True)
+        st.markdown('<p style="text-align: center; color: #666;">Already have an account?</p>', unsafe_allow_html=True)
+        
+        # Sign In button outside the form for better reliability
+        col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
+        with col_btn2:
+            if st.button("🔐 Sign In", use_container_width=True):
+                st.session_state.page = 'signin'
+                st.rerun()
 

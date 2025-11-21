@@ -36,6 +36,7 @@ import os
 # Import authentication modules
 from src.auth import is_authenticated, get_current_user, sign_out
 from src.auth_ui import render_sign_in_page, render_sign_up_page
+from src.landing_page import render_landing_page
 
 # Initialize the rerun counter for checkbox interactions
 if "checkbox_rerun_counter" not in st.session_state:
@@ -423,6 +424,10 @@ def _format_questions_from_array(questions_array: list) -> str:
     
     return ""
 
+# Initialize page state if not set (default to landing page)
+if "page" not in st.session_state:
+    st.session_state.page = "landing"
+
 # Page configuration (must be called before any other streamlit commands)
 if not is_authenticated():
     # Set page config for auth pages
@@ -431,6 +436,12 @@ if not is_authenticated():
             page_title="Sign Up - BellaTrix",
             page_icon="📝",
             layout="centered"
+        )
+    elif st.session_state.page == "landing":
+        st.set_page_config(
+            page_title="BellaTrix - Enterprise LLM Analytics",
+            page_icon="🚀",
+            layout="wide"
         )
     else:
         st.set_page_config(
@@ -447,14 +458,12 @@ else:
         initial_sidebar_state="expanded"
     )
 
-# Initialize page state if not set (default to signin)
-if "page" not in st.session_state:
-    st.session_state.page = "signin"
-
-# Authentication check - show sign-in/sign-up pages if not authenticated
+# Authentication check - show landing/sign-in/sign-up pages if not authenticated
 if not is_authenticated():
     if st.session_state.page == "signup":
         render_sign_up_page()
+    elif st.session_state.page == "landing":
+        render_landing_page()
     else:
         render_sign_in_page()
     st.stop()  # Stop execution here if not authenticated
