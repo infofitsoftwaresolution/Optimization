@@ -2771,14 +2771,21 @@ with tab1:
                 # Don't show if all models have data
                 if missing_models:
                     st.warning(f"""
-                     **No data found for configured model(s)**: {', '.join(missing_models)}
-                    
-                    **Configured models**: {', '.join(target_models)}  
-                    **Available in CSV**: {', '.join(available_in_csv[:5])}{'...' if len(available_in_csv) > 5 else ''}
-                    
-                    To see data for all configured models, run a new evaluation using the sidebar. 
-                    The dashboard will use the correct model IDs from your configuration.
-                    """)
+                     **⚠️ Missing Evaluation Data**
+                     
+                     The following configured models have **no data** in the CSV files:
+                     - {', '.join(missing_models)}
+                     
+                     **Available data**: {', '.join(available_in_csv[:5]) if available_in_csv else 'None'}{'...' if len(available_in_csv) > 5 else ''}
+                     
+                     **To fix this:**
+                     1. Go to the sidebar
+                     2. Make sure **all 3 models are checked**: Claude 3.7 Sonnet, Llama 3.3 70B Instruct, Nova Pro
+                     3. Enter a prompt or upload a file
+                     4. Click "▶️ Run Evaluation"
+                     
+                     The evaluation will run all selected models and save their results to the CSV files.
+                     """)
             elif missing_models and filtered_agg.empty:
                 st.info(f"""
                  **No evaluation data found for your configured models**: {', '.join(target_models)}
