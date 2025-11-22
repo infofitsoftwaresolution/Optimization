@@ -2508,24 +2508,34 @@ with tab1:
                 if cleaned_data_name.replace(' ', '') == target_clean.replace(' ', ''):
                     return True
                 
-                # 3. For models that should match exactly, check if key parts match
-                # This handles cases where names are saved exactly as configured
+                # 3. Parse model components for fuzzy matching
+                target_parts = target_clean.split()
+                data_parts = cleaned_data_name.split()
+                
+                if len(target_parts) < 1 or len(data_parts) < 1:
+                    continue
+                
+                # 4. For models that should match exactly, check if key parts match
                 # Extract key identifying parts (first word + last word usually identifies the model)
-                target_key = f"{target_parts[0]} {target_parts[-1]}".lower()
-                data_key = f"{data_parts[0]} {data_parts[-1]}".lower()
-                
-                # If key parts match and the full names are very similar, consider it a match
-                if target_key == data_key:
-                    # Check if middle parts are similar (for version numbers, sizes, etc.)
-                    target_middle = ' '.join(target_parts[1:-1]).lower()
-                    data_middle = ' '.join(data_parts[1:-1]).lower()
+                if len(target_parts) >= 2 and len(data_parts) >= 2:
+                    target_key = f"{target_parts[0]} {target_parts[-1]}".lower()
+                    data_key = f"{data_parts[0]} {data_parts[-1]}".lower()
                     
-                    # If middle parts match or are very similar, it's a match
-                    if target_middle == data_middle or target_middle in data_middle or data_middle in target_middle:
-                        return True
+                    # If key parts match and the full names are very similar, consider it a match
+                    if target_key == data_key:
+                        # Check if middle parts are similar (for version numbers, sizes, etc.)
+                        if len(target_parts) > 2 and len(data_parts) > 2:
+                            target_middle = ' '.join(target_parts[1:-1]).lower()
+                            data_middle = ' '.join(data_parts[1:-1]).lower()
+                            
+                            # If middle parts match or are very similar, it's a match
+                            if target_middle == data_middle or target_middle in data_middle or data_middle in target_middle:
+                                return True
+                        else:
+                            # For 2-word names like "Nova Pro", key match is enough
+                            return True
                 
-                # 4. Fallback: If names start with same word and end with same word, likely a match
-                # This catches "Llama 3.3 70B Instruct" vs "Llama 3.3 70B Instruct" (exact)
+                # 5. Fallback: If names start with same word and end with same word, likely a match
                 if len(target_parts) >= 2 and len(data_parts) >= 2:
                     if (target_parts[0].lower() == data_parts[0].lower() and 
                         target_parts[-1].lower() == data_parts[-1].lower()):
