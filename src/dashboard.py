@@ -2163,13 +2163,31 @@ with tab1:
                     data_runs_dir.mkdir(parents=True, exist_ok=True)  # Ensure directory exists
                     
                     metrics_logger = MetricsLogger(data_runs_dir)
+                    
+                    # Debug: Print what we're about to save
+                    import json
+                    st.write("🔍 **Debug - Results to save:**")
+                    for i, r in enumerate(results):
+                        st.write(f"  {i}. Model: {r.get('model_name', 'N/A')}, Status: {r.get('status', 'N/A')}, Error: {r.get('error', 'None')}")
+                    
                     metrics_logger.log_metrics(results)
                     
-                    # Verify what was saved
+                    # Force flush and verify what was saved by reading file directly
+                    import time
+                    time.sleep(0.5)  # Give file system time to flush
+                    
+                    # Read CSV directly from disk to verify
                     saved_df = metrics_logger.get_metrics_df()
                     if not saved_df.empty and 'model_name' in saved_df.columns:
                         saved_models = saved_df['model_name'].unique().tolist()
                         st.success(f"✅ **Saved to CSV**: {len(saved_df)} rows with models: {', '.join(saved_models)}")
+                        
+                        # Show row count per model
+                        for model in saved_models:
+                            count = len(saved_df[saved_df['model_name'] == model])
+                            st.write(f"   - {model}: {count} row(s)")
+                    else:
+                        st.error(f"❌ **ERROR**: CSV appears empty after save! Expected {len(results)} rows.")
                     
                     # Regenerate aggregated report to ensure all graphs are synced
                     report_generator = ReportGenerator(data_runs_dir)
