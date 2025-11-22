@@ -47,31 +47,24 @@ jobs:
         STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
         EOF
     
-    - name: Deploy to EC2
-      env:
-        EC2_HOST: ${{ secrets.EC2_HOST }}
-        EC2_USER: ${{ secrets.EC2_USER }}
-        EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
-      run: |
-        echo "Deployment configuration:"
-        echo "  EC2_HOST: $EC2_HOST"
-        echo "  EC2_USER: $EC2_USER"
-        echo ""
-        echo "Note: This workflow creates the .env file from secrets."
-        echo "      For actual deployment, you may want to:"
-        echo "      1. Use SSH to connect to EC2"
-        echo "      2. Run the setup-from-github-secrets.sh script"
-        echo "      3. Or use a deployment tool like AWS CodeDeploy"
-    
-    # Optional: Add actual deployment steps here
-    # - name: Deploy via SSH
-    #   uses: appleboy/ssh-action@master
-    #   with:
-    #     host: ${{ secrets.EC2_HOST }}
-    #     username: ${{ secrets.EC2_USER }}
-    #     key: ${{ secrets.EC2_SSH_KEY }}
-    #     script: |
-    #       cd /path/to/your/app
-    #       git pull
-    #       ./scripts/setup-from-github-secrets.sh
-    #       sudo systemctl restart your-service
+    - name: Deploy .env file to EC2
+      uses: appleboy/scp-action@master
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        source: ".env"
+        target: "/home/ec2-user/Optimization/"
+        strip_components: 0
+
+    - name: Set permissions and restart service
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        script: |
+          chmod 600 /home/ec2-user/Optimization/.env
+          cd /home/ec2-user/Optimization
+          git pull origin main || true
+          sudo systemctl restart streamlit-optimization.service
