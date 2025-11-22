@@ -2194,11 +2194,8 @@ with tab1:
                     report_generator.generate_report()
                     
                     st.session_state.evaluation_results = results
-                    # Increment cache key to force data reload and sync all graphs
-                    st.session_state.data_reload_key += 1
-                    st.cache_data.clear()
-                    # Reload data with new cache key to ensure all components see fresh data
-                    raw_df, agg_df = load_data(raw_path, agg_path, st.session_state.data_reload_key)
+                    # Mark that we just saved results so data will be reloaded on next page load
+                    st.session_state.just_saved_results = True
                     
                     # Reset evaluation flag after processing
                     st.session_state.run_evaluation = False
@@ -2213,6 +2210,12 @@ with tab1:
                     st.session_state.run_evaluation = False
     
     # Always reload data with current cache key to ensure sync
+    # Force reload by incrementing cache key if we just saved results
+    if st.session_state.get('just_saved_results', False):
+        st.session_state.data_reload_key += 1
+        st.session_state.just_saved_results = False
+        st.cache_data.clear()  # Clear all caches
+    
     raw_df, agg_df = load_data(raw_path, agg_path, st.session_state.data_reload_key)
     
     # Show evaluation results summary if available
