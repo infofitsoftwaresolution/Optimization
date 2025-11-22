@@ -3037,17 +3037,8 @@ with tab1:
                 # Warning removed per user request
                 # The warning was checking for missing models in CSV, but evaluations are working correctly
                 pass
-            elif missing_models and filtered_agg.empty:
-                st.info(f"""
-                 **No evaluation data found for your configured models**: {', '.join(target_models)}
-                
-                To get started:
-                1. Use the sidebar to enter a prompt or upload a file
-                2. Select the models you want to test
-                3. Click " Run Evaluation"
-                
-                Your configured models are: {', '.join(target_models)}
-                """)
+            # Info message removed per user request
+            pass
         
         if not filtered_agg.empty:
             col1, col2, col3, col4 = st.columns(4)
