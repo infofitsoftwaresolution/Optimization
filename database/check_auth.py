@@ -5,12 +5,52 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from dotenv import load_dotenv
 import os
+import subprocess
 
+# Try to load from GitHub secrets first (if gh CLI is available)
+def load_from_github_secrets():
+    """Try to load secrets from GitHub if gh CLI is available"""
+    try:
+        # Check if gh is available
+        result = subprocess.run(['gh', 'auth', 'status'], 
+                               capture_output=True, 
+                               text=True, 
+                               timeout=5)
+        if result.returncode == 0:
+            # GitHub CLI is authenticated, try to get secrets
+            secrets = {}
+            secret_names = ['DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD', 
+                          'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_REGION']
+            
+            for secret_name in secret_names:
+                try:
+                    result = subprocess.run(['gh', 'secret', 'get', secret_name],
+                                           capture_output=True,
+                                           text=True,
+                                           timeout=5)
+                    if result.returncode == 0 and result.stdout.strip():
+                        secrets[secret_name] = result.stdout.strip()
+                        os.environ[secret_name] = result.stdout.strip()
+                except:
+                    pass
+            
+            if secrets:
+                print(f"✅ Loaded {len(secrets)} secrets from GitHub")
+                return True
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+    return False
+
+# Try GitHub secrets first
+github_loaded = load_from_github_secrets()
+
+# Fallback to .env file
 env_path = Path(__file__).parent.parent / ".env"
 if env_path.exists():
     load_dotenv(env_path)
-    print(f"✅ Loaded .env file from: {env_path}")
-else:
+    if not github_loaded:
+        print(f"✅ Loaded .env file from: {env_path}")
+elif not github_loaded:
     print(f"⚠️  .env file not found at: {env_path}")
 
 # Check environment variables

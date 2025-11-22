@@ -23,11 +23,24 @@ if ! command -v gh &> /dev/null; then
     if [ -f /etc/redhat-release ]; then
         # Amazon Linux / CentOS / RHEL
         echo "Detected Amazon Linux / CentOS / RHEL"
-        sudo yum install -y gh || {
-            echo -e "${RED}Failed to install GitHub CLI. Please install manually.${NC}"
-            echo "Visit: https://cli.github.com/manual/installation"
-            exit 1
-        }
+        # Try using the install script
+        if [ -f "scripts/install-github-cli.sh" ]; then
+            chmod +x scripts/install-github-cli.sh
+            ./scripts/install-github-cli.sh || {
+                echo -e "${YELLOW}Install script failed, trying yum...${NC}"
+                sudo yum install -y gh || {
+                    echo -e "${RED}Failed to install GitHub CLI. Please install manually.${NC}"
+                    echo "Visit: https://cli.github.com/manual/installation"
+                    exit 1
+                }
+            }
+        else
+            sudo yum install -y gh || {
+                echo -e "${RED}Failed to install GitHub CLI. Please install manually.${NC}"
+                echo "Visit: https://cli.github.com/manual/installation"
+                exit 1
+            }
+        fi
     elif [ -f /etc/debian_version ]; then
         # Debian / Ubuntu
         echo "Detected Debian / Ubuntu"
