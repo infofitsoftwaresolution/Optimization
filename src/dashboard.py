@@ -1899,20 +1899,37 @@ with tab1:
             # Premium evaluation execution
             with st.status(" **Running Comprehensive Evaluation...**", expanded=True) as status:
                 try:
+                    # REAL-TIME VALIDATION: Check model registry before starting
+                    if not model_registry:
+                        st.error("❌ **Validation Error**: Model registry not loaded. Please refresh the page.")
+                        st.stop()
+                    
                     evaluator = BedrockEvaluator(model_registry)
                     selected_models = [model_registry.get_model_by_name(name) for name in selected_model_names]
                     
-                    # Debug: Verify which models were selected
+                    # REAL-TIME VALIDATION: Verify which models were selected
                     valid_models = [m for m in selected_models if m is not None]
                     if len(valid_models) != len(selected_model_names):
                         missing = [name for name, model in zip(selected_model_names, selected_models) if model is None]
-                        st.warning(f"⚠️ **Warning**: Could not find model configs for: {', '.join(missing)}")
-                    
-                    if not valid_models:
-                        st.error("❌ **Error**: No valid models selected! Please check your model selection in the sidebar.")
+                        st.error(f"❌ **Validation Error**: Could not find model configs for: {', '.join(missing)}")
+                        st.info("💡 **Tip**: Check that all model names in configs/models.yaml match the selected models.")
                         st.stop()
                     
-                    st.info(f"🔍 **Evaluating {len(valid_models)} model(s)**: {', '.join([m['name'] for m in valid_models])}")
+                    if not valid_models:
+                        st.error("❌ **Validation Error**: No valid models selected! Please check your model selection in the sidebar.")
+                        st.stop()
+                    
+                    # REAL-TIME VALIDATION: Verify prompts are provided
+                    if not prompts_to_evaluate:
+                        st.error("❌ **Validation Error**: No prompts provided! Please enter a prompt or upload a file.")
+                        st.stop()
+                    
+                    # REAL-TIME VALIDATION: Verify AWS credentials
+                    import os
+                    if not os.getenv('AWS_ACCESS_KEY_ID') or not os.getenv('AWS_SECRET_ACCESS_KEY'):
+                        st.warning("⚠️ **Warning**: AWS credentials not found. Evaluation may fail.")
+                    
+                    st.success(f"✅ **Validation Passed**: Evaluating {len(valid_models)} model(s): {', '.join([m['name'] for m in valid_models])}")
                     
                     # Initialize master model evaluator if enabled
                     master_evaluator = None
@@ -2162,32 +2179,66 @@ with tab1:
                     data_runs_dir = project_root / "data" / "runs"
                     data_runs_dir.mkdir(parents=True, exist_ok=True)  # Ensure directory exists
                     
+                    # REAL-TIME VALIDATION: Validate results before saving
+                    if not results:
+                        st.error("❌ **Validation Error**: No results to save!")
+                        st.stop()
+                    
+                    # REAL-TIME VALIDATION: Check that all results have required fields
+                    required_fields = ['model_name', 'status', 'timestamp']
+                    invalid_results = []
+                    for i, r in enumerate(results):
+                        missing_fields = [field for field in required_fields if field not in r]
+                        if missing_fields:
+                            invalid_results.append(f"Result {i}: missing {', '.join(missing_fields)}")
+                    
+                    if invalid_results:
+                        st.error(f"❌ **Validation Error**: Invalid results detected:\n" + "\n".join(invalid_results))
+                        st.stop()
+                    
                     metrics_logger = MetricsLogger(data_runs_dir)
                     
-                    # Debug: Print what we're about to save
-                    import json
-                    st.write("🔍 **Debug - Results to save:**")
-                    for i, r in enumerate(results):
-                        st.write(f"  {i}. Model: {r.get('model_name', 'N/A')}, Status: {r.get('status', 'N/A')}, Error: {r.get('error', 'None')}")
+                    # REAL-TIME FEEDBACK: Show what we're about to save
+                    with st.expander("🔍 **Real-time Validation - Results to Save**", expanded=False):
+                        for i, r in enumerate(results):
+                            status_icon = "✅" if r.get('status') == 'success' else "❌"
+                            st.write(f"{status_icon} **{i+1}.** Model: **{r.get('model_name', 'N/A')}**, Status: {r.get('status', 'N/A')}, Error: {r.get('error', 'None')}")
                     
-                    metrics_logger.log_metrics(results)
+                    # Save with real-time validation
+                    try:
+                        metrics_logger.log_metrics(results)
+                    except Exception as save_error:
+                        st.error(f"❌ **Save Error**: Failed to save results: {save_error}")
+                        import traceback
+                        st.code(traceback.format_exc())
+                        st.stop()
                     
-                    # Force flush and verify what was saved by reading file directly
+                    # REAL-TIME VERIFICATION: Force flush and verify what was saved
                     import time
                     time.sleep(0.5)  # Give file system time to flush
                     
-                    # Read CSV directly from disk to verify
+                    # Read CSV directly from disk to verify (real-time check)
                     saved_df = metrics_logger.get_metrics_df()
                     if not saved_df.empty and 'model_name' in saved_df.columns:
                         saved_models = saved_df['model_name'].unique().tolist()
-                        st.success(f"✅ **Saved to CSV**: {len(saved_df)} rows with models: {', '.join(saved_models)}")
                         
-                        # Show row count per model
-                        for model in saved_models:
-                            count = len(saved_df[saved_df['model_name'] == model])
-                            st.write(f"   - {model}: {count} row(s)")
+                        # REAL-TIME VALIDATION: Verify all models were saved
+                        expected_models = list(set([r.get('model_name') for r in results if r.get('model_name')]))
+                        missing_models = [m for m in expected_models if m not in saved_models]
+                        
+                        if missing_models:
+                            st.warning(f"⚠️ **Warning**: Some models not found in CSV after save: {', '.join(missing_models)}")
+                        else:
+                            st.success(f"✅ **Real-time Validation Passed**: Saved {len(saved_df)} rows with all {len(saved_models)} model(s): {', '.join(saved_models)}")
+                        
+                        # Show row count per model (real-time feedback)
+                        with st.expander("📊 **Real-time Data Verification**", expanded=False):
+                            for model in saved_models:
+                                count = len(saved_df[saved_df['model_name'] == model])
+                                st.write(f"   - **{model}**: {count} row(s)")
                     else:
-                        st.error(f"❌ **ERROR**: CSV appears empty after save! Expected {len(results)} rows.")
+                        st.error(f"❌ **Validation Error**: CSV appears empty after save! Expected {len(results)} rows.")
+                        st.stop()
                     
                     # Regenerate aggregated report to ensure all graphs are synced
                     report_generator = ReportGenerator(data_runs_dir)
@@ -2768,14 +2819,18 @@ with tab1:
         # Premium Summary Cards
         st.header(" Executive Summary")
         
-        # SIMPLE CHECK: Check raw unfiltered CSV data directly for model names
+        # REAL-TIME CHECK: Check raw unfiltered CSV data directly for model names
         # Read CSV file directly from disk to bypass any caching issues
+        # This runs every time the page loads/refreshes to ensure real-time validation
         models_in_csv = set()
         raw_csv_path = project_root / "data" / "runs" / "raw_metrics.csv"
+        csv_last_modified = 0
         
         # Read directly from file to ensure we get latest data
         if raw_csv_path.exists():
             try:
+                # Get file modification time for real-time tracking
+                csv_last_modified = raw_csv_path.stat().st_mtime
                 direct_df = pd.read_csv(raw_csv_path, on_bad_lines='skip', engine='python')
                 if not direct_df.empty and "model_name" in direct_df.columns:
                     for model_name in direct_df["model_name"].unique():
@@ -2809,6 +2864,15 @@ with tab1:
                     for model_name in agg_df["model_name"].unique():
                         cleaned = clean_model_name(str(model_name)).strip().lower()
                         models_in_csv.add(cleaned)
+        
+        # Store CSV modification time in session state for real-time tracking
+        if 'csv_last_modified' not in st.session_state:
+            st.session_state.csv_last_modified = csv_last_modified
+        elif st.session_state.csv_last_modified != csv_last_modified:
+            # CSV was modified, trigger auto-refresh
+            st.session_state.csv_last_modified = csv_last_modified
+            st.session_state.data_reload_key += 1
+            st.cache_data.clear()
         
         # Show helpful warning/info if some configured models don't have data
         if target_models:
