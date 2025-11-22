@@ -687,7 +687,13 @@ with st.sidebar:
         </div>
         """, unsafe_allow_html=True)
         
-        if st.button("🚪 Sign Out", use_container_width=True, key="signout_button"):
+        if st.button(
+            "🚪 Sign Out", 
+            use_container_width=True, 
+            key="signout_button",
+            help="Sign out of your account",
+            type="secondary"
+        ):
             sign_out()
     
     st.markdown("""
@@ -714,7 +720,9 @@ with st.sidebar:
             height=100,
             placeholder="Enter your prompt here...",
             help=" Tip: Be specific about your expected output format for better analysis.",
-            key="custom_prompt_input_sidebar"
+            key="custom_prompt_input_sidebar",
+            label_visibility="visible",
+            autocomplete="off"
         )
     
     # File Upload Section in Sidebar
@@ -724,7 +732,8 @@ with st.sidebar:
             type=None,  # Accept all files - we'll validate the content
             accept_multiple_files=False,
             help="Upload a JSON or CSV file containing prompts. CSV should have a 'prompt' column. JSON can be an array of objects with 'prompt' field. Supported extensions: .json, .csv, .txt",
-            key="prompt_file_uploader_sidebar"
+            key="prompt_file_uploader_sidebar",
+            label_visibility="visible"
         )
         
         # Handle file upload
@@ -1785,7 +1794,13 @@ with st.sidebar:
     st.session_state.master_model_type = master_model_type if use_master_model else None
     
     # Run Button in Sidebar
-    if st.button(" Run Evaluation", type="primary", use_container_width=True, key="run_eval_sidebar"):
+    if st.button(
+        " Run Evaluation", 
+        type="primary", 
+        use_container_width=True, 
+        key="run_eval_sidebar",
+        help="Run evaluation with selected models and prompts"
+    ):
         st.session_state.run_evaluation = True
         st.session_state.prompts_to_evaluate = prompts_to_use
         st.session_state.prompts_with_metadata = prompts_with_metadata  # Store metadata
@@ -3139,9 +3154,21 @@ with tab1:
                 key="viz_selector"
             )
         with refresh_col2:
-            auto_refresh = st.checkbox("🔄 Auto-refresh", value=False, help="Automatically refresh data every 5 seconds", key="auto_refresh")
+            auto_refresh = st.checkbox(
+                "🔄 Auto-refresh", 
+                value=False, 
+                help="Automatically refresh data every 5 seconds", 
+                key="auto_refresh",
+                label_visibility="visible"
+            )
         with refresh_col3:
-            if st.button("🔄 Refresh Now", help="Manually reload data and update visualizations", use_container_width=True, key="refresh_viz"):
+            if st.button(
+                "🔄 Refresh Now", 
+                help="Manually reload data and update visualizations", 
+                use_container_width=True, 
+                key="refresh_viz",
+                type="secondary"
+            ):
                 st.session_state.data_reload_key += 1
                 st.cache_data.clear()
                 st.rerun()

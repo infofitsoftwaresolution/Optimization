@@ -47,8 +47,19 @@ def render_sign_in_page():
         st.markdown('<div class="auth-header"><h1>🔐 Sign In</h1><p>Welcome back to BellaTrix</p></div>', unsafe_allow_html=True)
         
         with st.form("signin_form"):
-            username_or_email = st.text_input("Username or Email", placeholder="Enter your username or email")
-            password = st.text_input("Password", type="password", placeholder="Enter your password")
+            username_or_email = st.text_input(
+                "Username or Email", 
+                placeholder="Enter your username or email",
+                autocomplete="username",
+                label_visibility="visible"
+            )
+            password = st.text_input(
+                "Password", 
+                type="password", 
+                placeholder="Enter your password",
+                autocomplete="current-password",
+                label_visibility="visible"
+            )
             
             submit_button = st.form_submit_button("Sign In", use_container_width=True)
             
@@ -118,10 +129,32 @@ def render_sign_up_page():
         st.markdown('<div class="auth-header"><h1>📝 Sign Up</h1><p>Create your BellaTrix account</p></div>', unsafe_allow_html=True)
         
         with st.form("signup_form"):
-            username = st.text_input("Username", placeholder="Choose a username")
-            email = st.text_input("Email", placeholder="Enter your email address")
-            password = st.text_input("Password", type="password", placeholder="Create a password (min 6 characters)")
-            confirm_password = st.text_input("Confirm Password", type="password", placeholder="Confirm your password")
+            username = st.text_input(
+                "Username", 
+                placeholder="Choose a username",
+                autocomplete="username",
+                label_visibility="visible"
+            )
+            email = st.text_input(
+                "Email", 
+                placeholder="Enter your email address",
+                autocomplete="email",
+                label_visibility="visible"
+            )
+            password = st.text_input(
+                "Password", 
+                type="password", 
+                placeholder="Create a password (min 6 characters)",
+                autocomplete="new-password",
+                label_visibility="visible"
+            )
+            confirm_password = st.text_input(
+                "Confirm Password", 
+                type="password", 
+                placeholder="Confirm your password",
+                autocomplete="new-password",
+                label_visibility="visible"
+            )
             
             submit_button = st.form_submit_button("Sign Up", use_container_width=True, type="primary")
             
