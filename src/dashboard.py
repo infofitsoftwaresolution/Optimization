@@ -1533,11 +1533,13 @@ with st.sidebar:
                             
                             st.success(f" Saved {len(metrics)} metrics to {metrics_logger.raw_csv_path}")
                             
-                            # Trigger data reload
+                            # Trigger data reload and clear cache for real-time updates
                             if 'data_reload_key' in st.session_state:
-                                st.session_state.data_reload_key = datetime.now().isoformat()
+                                st.session_state.data_reload_key += 1
+                            st.cache_data.clear()
                             
-                            st.info(" Refresh the page to see the new metrics in the dashboard")
+                            st.info(" ✅ Data saved! Dashboard will update automatically.")
+                            st.rerun()
                             
                         except Exception as e:
                             st.error(f" Error saving metrics: {str(e)}")
@@ -2335,6 +2337,10 @@ with tab1:
                         st.write(f"💾 **Calling log_metrics with {len(results)} results...**")
                         metrics_logger.log_metrics(results)
                         st.write(f"✅ **log_metrics completed**")
+                        
+                        # REAL-TIME: Clear cache and trigger reload for immediate updates
+                        st.session_state.data_reload_key += 1
+                        st.cache_data.clear()
                     except Exception as save_error:
                         st.error(f"❌ **Save Error**: Failed to save results: {save_error}")
                         import traceback
@@ -3122,14 +3128,38 @@ with tab1:
         # Always show Interactive Analytics header
         st.header(" Interactive Analytics")
         
-        # Always show visualization selector
-        viz_option = st.selectbox(
-            "Choose Visualization Type",
-            ["Performance Dashboard", "Cost Analysis", "Quality Metrics", "Token Usage"],
-            help="Select which metrics to visualize"
-        )
+        # REAL-TIME: Add auto-refresh button and auto-refresh toggle
+        refresh_col1, refresh_col2, refresh_col3 = st.columns([2, 1, 1])
+        with refresh_col1:
+            # Always show visualization selector
+            viz_option = st.selectbox(
+                "Choose Visualization Type",
+                ["Performance Dashboard", "Cost Analysis", "Quality Metrics", "Token Usage"],
+                help="Select which metrics to visualize",
+                key="viz_selector"
+            )
+        with refresh_col2:
+            auto_refresh = st.checkbox("🔄 Auto-refresh", value=False, help="Automatically refresh data every 5 seconds", key="auto_refresh")
+        with refresh_col3:
+            if st.button("🔄 Refresh Now", help="Manually reload data and update visualizations", use_container_width=True, key="refresh_viz"):
+                st.session_state.data_reload_key += 1
+                st.cache_data.clear()
+                st.rerun()
         
-        # Ensure we use the most up-to-date synced data
+        # REAL-TIME: Auto-refresh functionality using timer
+        if auto_refresh:
+            if 'last_refresh_time' not in st.session_state:
+                st.session_state.last_refresh_time = time.time()
+            
+            current_time = time.time()
+            if current_time - st.session_state.last_refresh_time >= 5:
+                st.session_state.last_refresh_time = current_time
+                st.session_state.data_reload_key += 1
+                st.cache_data.clear()
+                st.rerun()
+        
+        # Use the already-filtered data from above (filtered_raw and filtered_agg)
+        # This ensures consistency and real-time updates
         if not filtered_raw.empty and len(filtered_raw) > 0:
             
             # Use synced data - ensure fresh copy from loaded data
@@ -3223,12 +3253,12 @@ with tab1:
                                         color_discrete_sequence=px.colors.qualitative.Pastel)
                             fig.update_layout(showlegend=False, height=400, template="plotly_white")
                             st.plotly_chart(fig, use_container_width=True)
+            else:
+                # Show placeholder when success_df is empty (all data filtered out)
+                st.info(f"💡 **No successful evaluation data available for {viz_option}.** Run an evaluation from the sidebar to see visualizations.")
         else:
-            # Show placeholder when no data available
+            # Show placeholder when filtered_raw is empty
             st.info(f"💡 **No evaluation data available for {viz_option}.** Run an evaluation from the sidebar to see visualizations.")
-    else:
-        # Empty state when filtered_raw is empty
-        st.info(f"💡 **No evaluation data available for {viz_option}.** Run an evaluation from the sidebar to see visualizations.")
 
 # ==========================================
 # TAB 2: Premium Historical Results
