@@ -1902,6 +1902,18 @@ with tab1:
                     evaluator = BedrockEvaluator(model_registry)
                     selected_models = [model_registry.get_model_by_name(name) for name in selected_model_names]
                     
+                    # Debug: Verify which models were selected
+                    valid_models = [m for m in selected_models if m is not None]
+                    if len(valid_models) != len(selected_model_names):
+                        missing = [name for name, model in zip(selected_model_names, selected_models) if model is None]
+                        st.warning(f"⚠️ **Warning**: Could not find model configs for: {', '.join(missing)}")
+                    
+                    if not valid_models:
+                        st.error("❌ **Error**: No valid models selected! Please check your model selection in the sidebar.")
+                        st.stop()
+                    
+                    st.info(f"🔍 **Evaluating {len(valid_models)} model(s)**: {', '.join([m['name'] for m in valid_models])}")
+                    
                     # Initialize master model evaluator if enabled
                     master_evaluator = None
                     use_master = st.session_state.get('use_master_model', False)
@@ -2135,6 +2147,11 @@ with tab1:
             # Save results automatically and reload data
             if results:
                 try:
+                    # Debug: Show what models were evaluated
+                    model_names_in_results = [r.get('model_name', 'unknown') for r in results]
+                    unique_models = list(set(model_names_in_results))
+                    st.info(f"📊 **Saving {len(results)} results** from {len(unique_models)} model(s): {', '.join(unique_models)}")
+                    
                     # Use absolute path based on project root
                     project_root = Path(__file__).parent.parent
                     data_runs_dir = project_root / "data" / "runs"
@@ -2142,6 +2159,12 @@ with tab1:
                     
                     metrics_logger = MetricsLogger(data_runs_dir)
                     metrics_logger.log_metrics(results)
+                    
+                    # Verify what was saved
+                    saved_df = metrics_logger.get_metrics_df()
+                    if not saved_df.empty and 'model_name' in saved_df.columns:
+                        saved_models = saved_df['model_name'].unique().tolist()
+                        st.success(f"✅ **Saved to CSV**: {len(saved_df)} rows with models: {', '.join(saved_models)}")
                     
                     # Regenerate aggregated report to ensure all graphs are synced
                     report_generator = ReportGenerator(data_runs_dir)
