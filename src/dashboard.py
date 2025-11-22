@@ -2721,8 +2721,8 @@ with tab1:
         # Premium Summary Cards
         st.header(" Executive Summary")
         
-        # Check which configured models have data - check AFTER filtering/normalization
-        # This ensures we check the actual data that will be displayed
+        # Check which configured models have data - check BOTH filtered AND raw unfiltered data
+        # This ensures we detect models even if filtering fails
         models_with_data = set()
         if not filtered_agg.empty and "model_name" in filtered_agg.columns:
             for model_name in filtered_agg["model_name"].unique():
@@ -2736,6 +2736,19 @@ with tab1:
                 cleaned = clean_model_name(model_name).strip()
                 models_in_raw.add(cleaned)
         
+        # FALLBACK: Also check raw unfiltered data to catch models that filtering might have missed
+        # This is important because if matching fails, filtered data will be empty but raw data has the models
+        if target_models:
+            for target_model in target_models:
+                # Check raw unfiltered data directly
+                if not raw_df.empty and "model_name" in raw_df.columns:
+                    for raw_model_name in raw_df["model_name"].unique():
+                        raw_cleaned = clean_model_name(raw_model_name).strip()
+                        # Use matching function to see if this raw model matches the target
+                        if matches_target_model(raw_cleaned, [target_model]):
+                            models_in_raw.add(target_model.strip())  # Add the configured name
+                            break
+        
         # Combine both sets for comprehensive check (use original case for comparison)
         all_models_in_data = models_with_data | models_in_raw
         
@@ -2744,10 +2757,18 @@ with tab1:
             missing_models = []
             models_with_any_data = []
             for target_model in target_models:
-                # Check if this target model has any matching data in filtered results
-                # Since filtered data is already normalized to configured names, exact match should work
+                # Check if this target model has any matching data
                 target_clean = target_model.strip()
+                # First check exact match in filtered data
                 has_match = target_clean in all_models_in_data
+                
+                # If no exact match, check if any raw data matches using the matching function
+                if not has_match and not raw_df.empty and "model_name" in raw_df.columns:
+                    for raw_model_name in raw_df["model_name"].unique():
+                        raw_cleaned = clean_model_name(raw_model_name).strip()
+                        if matches_target_model(raw_cleaned, [target_model]):
+                            has_match = True
+                            break
                 
                 if has_match:
                     models_with_any_data.append(target_model)
