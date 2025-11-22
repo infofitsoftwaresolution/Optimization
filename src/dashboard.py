@@ -2061,15 +2061,57 @@ with tab1:
                         for model_idx, model in enumerate(selected_models):
                             if model is None:
                                 st.warning(f"⚠️ Model at index {model_idx} is None - skipping")
+                                error_metric = {
+                                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                                    "run_id": f"dashboard_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                                    "model_name": f"unknown_model_{model_idx}",
+                                    "model_id": "unknown",
+                                    "prompt_id": f"prompt_{prompt_idx+1}" if len(prompts_to_evaluate) > 1 else None,
+                                    "input_prompt": current_prompt,
+                                    "input_tokens": 0,
+                                    "output_tokens": 0,
+                                    "latency_ms": 0,
+                                    "json_valid": False,
+                                    "error": "Model is None",
+                                    "status": "error",
+                                    "cost_usd_input": 0.0,
+                                    "cost_usd_output": 0.0,
+                                    "cost_usd_total": 0.0,
+                                    "response": ""
+                                }
+                                results.append(error_metric)
                                 continue
                             
                             if 'name' not in model:
                                 st.warning(f"⚠️ Model at index {model_idx} has no 'name' field - skipping")
+                                error_metric = {
+                                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                                    "run_id": f"dashboard_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                                    "model_name": f"unknown_model_{model_idx}",
+                                    "model_id": "unknown",
+                                    "prompt_id": f"prompt_{prompt_idx+1}" if len(prompts_to_evaluate) > 1 else None,
+                                    "input_prompt": current_prompt,
+                                    "input_tokens": 0,
+                                    "output_tokens": 0,
+                                    "latency_ms": 0,
+                                    "json_valid": False,
+                                    "error": "Model missing 'name' field",
+                                    "status": "error",
+                                    "cost_usd_input": 0.0,
+                                    "cost_usd_output": 0.0,
+                                    "cost_usd_total": 0.0,
+                                    "response": ""
+                                }
+                                results.append(error_metric)
                                 continue
                             
                             current_evaluation += 1
-                            status.update(label=f" Testing {model['name']} with prompt {prompt_idx+1}/{len(prompts_to_evaluate)}... ({current_evaluation}/{total_evaluations})")
+                            model_name = model.get('name', 'unknown')
+                            status.update(label=f" Testing {model_name} with prompt {prompt_idx+1}/{len(prompts_to_evaluate)}... ({current_evaluation}/{total_evaluations})")
                             progress_bar.progress(current_evaluation / total_evaluations)
+                            
+                            # REAL-TIME LOGGING: Log which model we're about to evaluate
+                            st.write(f"🔍 **Evaluating**: {model_name} (Model {model_idx+1}/{len(selected_models)})")
                             
                             try:
                                 # Format prompt as JSON if requested
@@ -2181,9 +2223,19 @@ with tab1:
                                     st.warning(f" Cannot calculate similarity: model evaluation failed for {model.get('name', 'unknown')}")
 
                                 
+                                # REAL-TIME LOGGING: Log result before appending
+                                result_status = metrics.get('status', 'unknown')
+                                result_error = metrics.get('error', 'None')
+                                st.write(f"📝 **Result for {model_name}**: Status={result_status}, Error={result_error}")
+                                
                                 results.append(metrics)
+                                st.write(f"✅ **Added to results**: {model_name} (Total results: {len(results)})")
                             
                             except Exception as e:
+                                # REAL-TIME LOGGING: Log exception details
+                                st.error(f"❌ **Exception evaluating {model_name}**: {str(e)}")
+                                import traceback
+                                st.code(traceback.format_exc())
                                 error_metric = {
                                     "timestamp": datetime.utcnow().isoformat() + "Z",
                                     "run_id": f"dashboard_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
@@ -2206,6 +2258,25 @@ with tab1:
                     
                     progress_bar.progress(1.0)
                     status.update(label=" Evaluation complete! Generating insights...", state="complete")
+                    
+                    # REAL-TIME LOGGING: Show summary of all results collected
+                    st.success(f"📊 **Evaluation Complete**: Collected {len(results)} result(s)")
+                    if results:
+                        result_summary = {}
+                        for r in results:
+                            model = r.get('model_name', 'unknown')
+                            status_val = r.get('status', 'unknown')
+                            if model not in result_summary:
+                                result_summary[model] = {'success': 0, 'error': 0, 'total': 0}
+                            result_summary[model]['total'] += 1
+                            if status_val == 'success':
+                                result_summary[model]['success'] += 1
+                            else:
+                                result_summary[model]['error'] += 1
+                        
+                        st.write("**Results Summary:**")
+                        for model, counts in result_summary.items():
+                            st.write(f"  - **{model}**: {counts['total']} total ({counts['success']} success, {counts['error']} error)")
                     
                 except Exception as e:
                     status.update(label=" Evaluation failed", state="error")
