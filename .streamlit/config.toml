@@ -1,0 +1,26 @@
+[server]
+# Security headers
+enableCORS = false
+enableXsrfProtection = true
+cookieSecret = "your-secret-key-change-in-production"
+maxUploadSize = 200
+maxMessageSize = 200
+# Cookie security settings (Note: Streamlit doesn't directly support these, handled via nginx)
+enableWebsocketCompression = false
+
+[browser]
+gatherUsageStats = false
+serverAddress = "0.0.0.0"
+serverPort = 8501
+
+[theme]
+primaryColor = "#667eea"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f0f2f6"
+textColor = "#262730"
+font = "sans serif"
+
+[client]
+showErrorDetails = true
+toolbarMode = "minimal"
+
