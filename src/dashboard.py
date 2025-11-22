@@ -2782,17 +2782,18 @@ with tab1:
         # Premium Summary Cards
         st.header(" Executive Summary")
         
-        # Check which configured models have data (in both aggregated and raw)
+        # Check which configured models have data - use UNFILTERED raw data for accurate check
+        # This ensures we check all data, not just filtered data
         models_with_data = set()
-        if not filtered_agg.empty and "model_name" in filtered_agg.columns:
-            for model_name in filtered_agg["model_name"]:
+        if not agg_df.empty and "model_name" in agg_df.columns:
+            for model_name in agg_df["model_name"]:
                 cleaned = clean_model_name(model_name)
                 models_with_data.add(cleaned)
         
-        # Also check raw data for models that might not be aggregated yet
+        # Also check raw data for models that might not be aggregated yet - use UNFILTERED data
         models_in_raw = set()
-        if not filtered_raw.empty and "model_name" in filtered_raw.columns:
-            for model_name in filtered_raw["model_name"].unique():
+        if not raw_df.empty and "model_name" in raw_df.columns:
+            for model_name in raw_df["model_name"].unique():
                 cleaned = clean_model_name(model_name)
                 models_in_raw.add(cleaned)
         
