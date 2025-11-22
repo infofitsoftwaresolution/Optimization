@@ -2769,18 +2769,46 @@ with tab1:
         st.header(" Executive Summary")
         
         # SIMPLE CHECK: Check raw unfiltered CSV data directly for model names
-        # This is the most reliable way - check what's actually in the CSV files
+        # Read CSV file directly from disk to bypass any caching issues
         models_in_csv = set()
-        if not raw_df.empty and "model_name" in raw_df.columns:
-            for model_name in raw_df["model_name"].unique():
-                cleaned = clean_model_name(str(model_name)).strip().lower()
-                models_in_csv.add(cleaned)
+        raw_csv_path = project_root / "data" / "runs" / "raw_metrics.csv"
+        
+        # Read directly from file to ensure we get latest data
+        if raw_csv_path.exists():
+            try:
+                direct_df = pd.read_csv(raw_csv_path, on_bad_lines='skip', engine='python')
+                if not direct_df.empty and "model_name" in direct_df.columns:
+                    for model_name in direct_df["model_name"].unique():
+                        cleaned = clean_model_name(str(model_name)).strip().lower()
+                        models_in_csv.add(cleaned)
+            except Exception as e:
+                # Fallback to using loaded data
+                if not raw_df.empty and "model_name" in raw_df.columns:
+                    for model_name in raw_df["model_name"].unique():
+                        cleaned = clean_model_name(str(model_name)).strip().lower()
+                        models_in_csv.add(cleaned)
+        else:
+            # If file doesn't exist, use loaded data
+            if not raw_df.empty and "model_name" in raw_df.columns:
+                for model_name in raw_df["model_name"].unique():
+                    cleaned = clean_model_name(str(model_name)).strip().lower()
+                    models_in_csv.add(cleaned)
         
         # Also check aggregated CSV
-        if not agg_df.empty and "model_name" in agg_df.columns:
-            for model_name in agg_df["model_name"].unique():
-                cleaned = clean_model_name(str(model_name)).strip().lower()
-                models_in_csv.add(cleaned)
+        agg_csv_path = project_root / "data" / "runs" / "aggregated_metrics.csv"
+        if agg_csv_path.exists():
+            try:
+                direct_agg_df = pd.read_csv(agg_csv_path, on_bad_lines='skip', engine='python')
+                if not direct_agg_df.empty and "model_name" in direct_agg_df.columns:
+                    for model_name in direct_agg_df["model_name"].unique():
+                        cleaned = clean_model_name(str(model_name)).strip().lower()
+                        models_in_csv.add(cleaned)
+            except Exception:
+                # Fallback to using loaded data
+                if not agg_df.empty and "model_name" in agg_df.columns:
+                    for model_name in agg_df["model_name"].unique():
+                        cleaned = clean_model_name(str(model_name)).strip().lower()
+                        models_in_csv.add(cleaned)
         
         # Show helpful warning/info if some configured models don't have data
         if target_models:
