@@ -68,6 +68,17 @@ jobs:
           cd /home/ec2-user/Optimization
           git pull origin main || true
           
+          # Validate Python syntax before restarting
+          echo "🔍 Validating Python syntax..."
+          source .venv/bin/activate || true
+          python3 -m py_compile src/dashboard.py
+          if [ $? -eq 0 ]; then
+            echo "✅ Syntax validation passed"
+          else
+            echo "❌ Syntax validation failed!"
+            exit 1
+          fi
+          
           # Update systemd service file to use wrapper script
           if [ -f "streamlit-optimization.service" ]; then
             sudo cp streamlit-optimization.service /etc/systemd/system/
@@ -78,9 +89,22 @@ jobs:
           # Make sure wrapper script is executable
           chmod +x scripts/start-streamlit-with-secrets.sh
           
+          # Stop service first to ensure clean restart
+          sudo systemctl stop streamlit-optimization.service || true
+          sleep 2
+          
           # Restart service
-          sudo systemctl restart streamlit-optimization.service
-          echo "✅ Service restarted"
+          sudo systemctl start streamlit-optimization.service
+          sleep 3
           
           # Check service status
-          sudo systemctl status streamlit-optimization.service --no-pager -l | head -15
+          if sudo systemctl is-active --quiet streamlit-optimization.service; then
+            echo "✅ Service started successfully"
+          else
+            echo "❌ Service failed to start!"
+            sudo systemctl status streamlit-optimization.service --no-pager -l
+            exit 1
+          fi
+          
+          # Show service status
+          sudo systemctl status streamlit-optimization.service --no-pager -l | head -20
