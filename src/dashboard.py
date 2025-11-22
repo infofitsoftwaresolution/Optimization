@@ -1751,7 +1751,18 @@ with st.sidebar:
         custom_count = 1 if user_prompt.strip() else 0
         selected_count = len(st.session_state.get('selected_uploaded_prompts', []))
         cw_count = len(st.session_state.get('selected_cloudwatch_prompts', []))
-        st.info(f"** Total Prompts Selected:** {len(prompts_to_use)}")
+        # REAL-TIME VALIDATION: Show validation status
+        selected_models_count = len(st.session_state.get('selected_models', []))
+        validation_status = "✅ Ready" if selected_models_count > 0 else "⚠️ Missing Models"
+        validation_color = "#4caf50" if selected_models_count > 0 else "#ff9800"
+        
+        st.markdown(f"""
+        <div style="background-color: {validation_color}; padding: 10px; border-radius: 5px; margin: 10px 0; color: white;">
+            <strong>📊 {validation_status}</strong><br>
+            <small>Prompts: {len(prompts_to_use)} | Models: {selected_models_count}</small>
+        </div>
+        """, unsafe_allow_html=True)
+        
         if len(prompts_to_use) > 1:
             parts = []
             if custom_count > 0:
@@ -1762,6 +1773,10 @@ with st.sidebar:
                 parts.append(f"{cw_count} from CloudWatch")
             if parts:
                 st.caption(f"• {' + '.join(parts)}")
+        
+        # Show validation warnings
+        if selected_models_count == 0:
+            st.warning("⚠️ **Action Required**: Select at least one model above to run evaluation.")
     
     # Store master model settings in session state
     st.session_state.use_master_model = use_master_model
