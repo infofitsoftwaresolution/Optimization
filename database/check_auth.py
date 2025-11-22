@@ -46,16 +46,28 @@ def load_from_github_secrets():
         print("Loading secrets from GitHub...")
         for secret_name in secret_names:
             try:
+                # Try with repository context
                 result = subprocess.run(['gh', 'secret', 'get', secret_name],
                                        capture_output=True,
                                        text=True,
-                                       timeout=10)
+                                       timeout=10,
+                                       cwd=str(Path(__file__).parent.parent))
+                
+                # Check both returncode and stderr
                 if result.returncode == 0 and result.stdout.strip():
                     secrets[secret_name] = result.stdout.strip()
                     os.environ[secret_name] = result.stdout.strip()
                     print(f"  ✓ Loaded {secret_name}")
                 else:
-                    print(f"  ⚠️  {secret_name} not found or empty")
+                    # Try to get more info about why it failed
+                    error_msg = result.stderr.strip() if result.stderr else "Unknown error"
+                    if "not found" in error_msg.lower() or "no secret" in error_msg.lower():
+                        print(f"  ⚠️  {secret_name} not found in repository secrets")
+                    elif result.stdout.strip():
+                        # Sometimes secrets return empty but command succeeds
+                        print(f"  ⚠️  {secret_name} is empty")
+                    else:
+                        print(f"  ⚠️  {secret_name} failed: {error_msg}")
             except Exception as e:
                 print(f"  ❌ Error loading {secret_name}: {e}")
         
