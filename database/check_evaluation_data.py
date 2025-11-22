@@ -50,24 +50,21 @@ def check_csv_files():
                 print(f"  - {model}: {count} rows, status: {statuses}")
                 
                 # Show error details if any
-                if 'error' in model_data['status'].values:
-                    error_rows = model_data[model_data['status'] == 'error']
-                    if 'error_message' in error_rows.columns:
-                        errors = error_rows['error_message'].dropna().unique()
-                        if len(errors) > 0:
-                            print(f"    Error messages:")
-                            for err in errors[:3]:  # Show first 3 errors
-                                err_str = str(err)[:100]  # Truncate long errors
-                                print(f"      - {err_str}")
-                elif 'error' in raw_df.columns:
-                    error_rows = model_data[model_data['status'] == 'error']
-                    if len(error_rows) > 0 and 'error' in error_rows.columns:
-                        errors = error_rows['error'].dropna().unique()
-                        if len(errors) > 0:
-                            print(f"    Errors:")
-                            for err in errors[:3]:
-                                err_str = str(err)[:100]
-                                print(f"      - {err_str}")
+                error_rows = model_data[model_data['status'] == 'error']
+                if len(error_rows) > 0:
+                    print(f"    Error details:")
+                    # Check multiple possible error columns
+                    for col in ['error', 'error_message', 'response']:
+                        if col in error_rows.columns:
+                            errors = error_rows[col].dropna().unique()
+                            if len(errors) > 0:
+                                for err in errors[:2]:  # Show first 2 errors
+                                    err_str = str(err)
+                                    # Truncate very long errors
+                                    if len(err_str) > 200:
+                                        err_str = err_str[:200] + "..."
+                                    print(f"      [{col}]: {err_str}")
+                                break
         else:
             print("⚠️  'model_name' column not found in CSV")
             print(f"   Available columns: {list(raw_df.columns)}")
