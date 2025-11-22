@@ -1,10 +1,19 @@
 #!/bin/bash
-# Wrapper script to start Streamlit with GitHub Secrets loaded as environment variables
+# Wrapper script to start Streamlit with GitHub Secrets or .env file loaded as environment variables
 
 cd /home/ec2-user/Optimization
 
-# Load GitHub Secrets as environment variables
-source scripts/load-github-secrets.sh
+# Try to load GitHub Secrets first
+if [ -f "scripts/load-github-secrets.sh" ]; then
+    source scripts/load-github-secrets.sh
+fi
+
+# Fallback: Load .env file if it exists (takes precedence if GitHub secrets failed)
+if [ -f ".env" ]; then
+    set -a
+    source .env
+    set +a
+fi
 
 # Start Streamlit with the loaded environment variables
 exec /home/ec2-user/Optimization/.venv/bin/streamlit run src/dashboard.py \
