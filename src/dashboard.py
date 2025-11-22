@@ -2489,125 +2489,54 @@ with tab1:
             """Check if data model name matches any target model.
             
             Rules:
-            - Exact matches always work
-            - For Claude: "Claude 3 Sonnet" matches "Claude 3.7 Sonnet" (same major version)
-            - For Llama: Must match BOTH version AND size (e.g., "3.2 11B" must match exactly)
+            - Exact matches always work (case-insensitive)
+            - Partial matches for model families
             """
             if pd.isna(data_model_name):
                 return False
                 
-            cleaned_data_name = clean_model_name(str(data_model_name)).strip()
+            cleaned_data_name = clean_model_name(str(data_model_name)).strip().lower()
             
             for target in target_models:
-                target_clean = target.strip()
+                target_clean = target.strip().lower()
                 
-                # 1. Exact match (case-insensitive)
-                if cleaned_data_name.lower() == target_clean.lower():
+                # 1. Exact match (case-insensitive) - most reliable
+                if cleaned_data_name == target_clean:
                     return True
                 
-                # 2. Parse model components
-                target_parts = target_clean.split()
-                data_parts = cleaned_data_name.split()
+                # 2. Check if they're the same after removing extra spaces
+                if cleaned_data_name.replace(' ', '') == target_clean.replace(' ', ''):
+                    return True
                 
-                if len(target_parts) < 2 or len(data_parts) < 2:
-                    continue
+                # 3. For models that should match exactly, check if key parts match
+                # This handles cases where names are saved exactly as configured
+                # Extract key identifying parts (first word + last word usually identifies the model)
+                target_key = f"{target_parts[0]} {target_parts[-1]}".lower()
+                data_key = f"{data_parts[0]} {data_parts[-1]}".lower()
                 
-                # 3. Must have same family (Claude/Llama) and type (Sonnet/Instruct)
-                if target_parts[0].lower() != data_parts[0].lower():
-                    continue  # Different families
-                if target_parts[-1].lower() != data_parts[-1].lower():
-                    continue  # Different types
-                
-                # 4. Claude models: Match only if exact version match OR target has minor version and data has no minor
-                # "Claude 3.7 Sonnet" matches "Claude 3 Sonnet" but NOT "Claude 3.5 Sonnet"
-                if "claude" in target_clean.lower() and "sonnet" in target_clean.lower():
-                    # Extract versions: "Claude 3.7 Sonnet" -> "3.7", "Claude 3 Sonnet" -> "3"
-                    target_ver_str = target_parts[1] if len(target_parts) > 1 else ""
-                    data_ver_str = data_parts[1] if len(data_parts) > 1 else ""
+                # If key parts match and the full names are very similar, consider it a match
+                if target_key == data_key:
+                    # Check if middle parts are similar (for version numbers, sizes, etc.)
+                    target_middle = ' '.join(target_parts[1:-1]).lower()
+                    data_middle = ' '.join(data_parts[1:-1]).lower()
                     
-                    try:
-                        # Parse versions
-                        target_ver_parts = target_ver_str.split('.')
-                        data_ver_parts = data_ver_str.split('.')
-                        
-                        target_major = int(target_ver_parts[0]) if target_ver_parts[0] else 0
-                        data_major = int(data_ver_parts[0]) if data_ver_parts[0] else 0
-                        
-                        # Must have same major version
-                        if target_major != data_major or target_major == 0:
-                            continue
-                        
-                        # If both have minor versions, they must match EXACTLY
-                        if len(target_ver_parts) > 1 and len(data_ver_parts) > 1:
-                            target_minor = int(target_ver_parts[1])
-                            data_minor = int(data_ver_parts[1])
-                            # Exact match required: 3.7 matches 3.7, but NOT 3.5
-                            if target_minor == data_minor:
-                                return True
-                        # If target has minor version (3.7) but data doesn't (3), allow it
-                        # This allows "Claude 3 Sonnet" to match "Claude 3.7 Sonnet"
-                        elif len(target_ver_parts) > 1 and len(data_ver_parts) == 1:
+                    # If middle parts match or are very similar, it's a match
+                    if target_middle == data_middle or target_middle in data_middle or data_middle in target_middle:
+                        return True
+                
+                # 4. Fallback: If names start with same word and end with same word, likely a match
+                # This catches "Llama 3.3 70B Instruct" vs "Llama 3.3 70B Instruct" (exact)
+                if len(target_parts) >= 2 and len(data_parts) >= 2:
+                    if (target_parts[0].lower() == data_parts[0].lower() and 
+                        target_parts[-1].lower() == data_parts[-1].lower()):
+                        # For simple names like "Nova Pro", this is enough
+                        if len(target_parts) == 2 and len(data_parts) == 2:
                             return True
-                        # If both have no minor version, they match
-                        elif len(target_ver_parts) == 1 and len(data_ver_parts) == 1:
-                            return True
-                        # If target has no minor but data has minor (e.g., "3" vs "3.5"), don't match
-                        # This prevents "Claude 3.7 Sonnet" from matching "Claude 3.5 Sonnet"
-                        else:
-                            continue
-                    except (ValueError, IndexError):
-                        pass
-                
-                # 5. Llama models: Must match BOTH version AND size
-                elif "llama" in target_clean.lower() and "instruct" in target_clean.lower():
-                    # Extract version and size from target: "Llama 3.2 11B Instruct"
-                    target_version = None
-                    target_size = None
-                    for part in target_parts:
-                        if '.' in part and part.replace('.', '').replace('-', '').isdigit():
-                            target_version = part
-                        elif 'b' in part.lower() or 'm' in part.lower():
-                            size_str = part.lower().replace('b', '').replace('m', '').replace('-', '')
-                            if size_str.isdigit():
-                                target_size = part.lower()
-                    
-                    # Extract version and size from data: "Llama 3 70B Instruct"
-                    data_version = None
-                    data_size = None
-                    for part in data_parts:
-                        if '.' in part and part.replace('.', '').replace('-', '').isdigit():
-                            data_version = part
-                        elif 'b' in part.lower() or 'm' in part.lower():
-                            size_str = part.lower().replace('b', '').replace('m', '').replace('-', '')
-                            if size_str.isdigit():
-                                data_size = part.lower()
-                    
-                    # Both version and size must match exactly
-                    if target_version and target_size and data_version and data_size:
-                        # Check version match (major version must match)
-                        version_match = False
-                        try:
-                            target_major = int(target_version.split('.')[0])
-                            data_major = int(data_version.split('.')[0])
-                            if target_major == data_major:
-                                # If both have minor versions, they must match
-                                if '.' in target_version and '.' in data_version:
-                                    target_minor = int(target_version.split('.')[1])
-                                    data_minor = int(data_version.split('.')[1])
-                                    version_match = (target_minor == data_minor)
-                                elif '.' in target_version:
-                                    # Target has minor, data doesn't - check if minor matches expected
-                                    version_match = True  # Allow "3" to match "3.2"
-                                else:
-                                    version_match = True
-                        except (ValueError, IndexError):
-                            pass
-                        
-                        # Check size match (must be exact)
-                        size_match = (target_size.lower() == data_size.lower())
-                        
-                        # Both must match
-                        if version_match and size_match:
+                        # For longer names, check if all parts are present
+                        target_set = set(p.lower() for p in target_parts)
+                        data_set = set(p.lower() for p in data_parts)
+                        # If most parts match, consider it a match
+                        if len(target_set & data_set) >= len(target_set) * 0.8:
                             return True
                 
             return False
