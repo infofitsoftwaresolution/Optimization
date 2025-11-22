@@ -2719,52 +2719,36 @@ with tab1:
         # Premium Summary Cards
         st.header(" Executive Summary")
         
-        # Check which configured models have data - check BOTH filtered AND raw unfiltered data
-        # This ensures we detect models even if filtering fails
-        models_with_data = set()
-        if not filtered_agg.empty and "model_name" in filtered_agg.columns:
-            for model_name in filtered_agg["model_name"].unique():
-                cleaned = clean_model_name(model_name).strip()
-                models_with_data.add(cleaned)
+        # SIMPLE CHECK: Check raw unfiltered CSV data directly for model names
+        # This is the most reliable way - check what's actually in the CSV files
+        models_in_csv = set()
+        if not raw_df.empty and "model_name" in raw_df.columns:
+            for model_name in raw_df["model_name"].unique():
+                cleaned = clean_model_name(str(model_name)).strip().lower()
+                models_in_csv.add(cleaned)
         
-        # Also check filtered raw data for models that might not be aggregated yet
-        models_in_raw = set()
-        if not filtered_raw.empty and "model_name" in filtered_raw.columns:
-            for model_name in filtered_raw["model_name"].unique():
-                cleaned = clean_model_name(model_name).strip()
-                models_in_raw.add(cleaned)
-        
-        # FALLBACK: Also check raw unfiltered data to catch models that filtering might have missed
-        # This is important because if matching fails, filtered data will be empty but raw data has the models
-        if target_models:
-            for target_model in target_models:
-                # Check raw unfiltered data directly
-                if not raw_df.empty and "model_name" in raw_df.columns:
-                    for raw_model_name in raw_df["model_name"].unique():
-                        raw_cleaned = clean_model_name(raw_model_name).strip()
-                        # Use matching function to see if this raw model matches the target
-                        if matches_target_model(raw_cleaned, [target_model]):
-                            models_in_raw.add(target_model.strip())  # Add the configured name
-                            break
-        
-        # Combine both sets for comprehensive check (use original case for comparison)
-        all_models_in_data = models_with_data | models_in_raw
+        # Also check aggregated CSV
+        if not agg_df.empty and "model_name" in agg_df.columns:
+            for model_name in agg_df["model_name"].unique():
+                cleaned = clean_model_name(str(model_name)).strip().lower()
+                models_in_csv.add(cleaned)
         
         # Show helpful warning/info if some configured models don't have data
         if target_models:
             missing_models = []
             models_with_any_data = []
+            
             for target_model in target_models:
-                # Check if this target model has any matching data
-                target_clean = target_model.strip()
-                # First check exact match in filtered data
-                has_match = target_clean in all_models_in_data
+                target_clean = target_model.strip().lower()
+                has_match = False
                 
-                # If no exact match, check if any raw data matches using the matching function
-                if not has_match and not raw_df.empty and "model_name" in raw_df.columns:
-                    for raw_model_name in raw_df["model_name"].unique():
-                        raw_cleaned = clean_model_name(raw_model_name).strip()
-                        if matches_target_model(raw_cleaned, [target_model]):
+                # Simple check: does the cleaned target name appear in CSV (case-insensitive)
+                if target_clean in models_in_csv:
+                    has_match = True
+                else:
+                    # Try fuzzy matching with the matching function
+                    for csv_model in models_in_csv:
+                        if matches_target_model(csv_model, [target_model]):
                             has_match = True
                             break
                 
@@ -2774,24 +2758,27 @@ with tab1:
                     missing_models.append(target_model)
             
             # Show warning only if we have some data but not all
-            if missing_models and (not filtered_agg.empty or not filtered_raw.empty):
-                # Check what models we actually have data for
-                available_models = []
-                if not filtered_agg.empty and "model_name" in filtered_agg.columns:
-                    available_models.extend(filtered_agg["model_name"].unique().tolist())
-                if not filtered_raw.empty and "model_name" in filtered_raw.columns:
-                    available_models.extend(filtered_raw["model_name"].unique().tolist())
-                available_models = list(set(available_models))
+            if missing_models and (not raw_df.empty or not agg_df.empty):
+                # Show what's actually in the CSV files (raw data)
+                available_in_csv = []
+                if not raw_df.empty and "model_name" in raw_df.columns:
+                    available_in_csv.extend([clean_model_name(str(m)) for m in raw_df["model_name"].unique()[:5]])
+                if not agg_df.empty and "model_name" in agg_df.columns:
+                    available_in_csv.extend([clean_model_name(str(m)) for m in agg_df["model_name"].unique()[:5]])
+                available_in_csv = list(set(available_in_csv))
                 
-                st.warning(f"""
-                 **No data found for configured model(s)**: {', '.join(missing_models)}
-                
-                **Configured models**: {', '.join(target_models)}  
-                **Available data**: {', '.join([clean_model_name(m) for m in available_models[:3]])}{'...' if len(available_models) > 3 else ''}
-                
-                To see data for all configured models, run a new evaluation using the sidebar. 
-                The dashboard will use the correct model IDs from your configuration.
-                """)
+                # Only show warning if we truly have missing models
+                # Don't show if all models have data
+                if missing_models:
+                    st.warning(f"""
+                     **No data found for configured model(s)**: {', '.join(missing_models)}
+                    
+                    **Configured models**: {', '.join(target_models)}  
+                    **Available in CSV**: {', '.join(available_in_csv[:5])}{'...' if len(available_in_csv) > 5 else ''}
+                    
+                    To see data for all configured models, run a new evaluation using the sidebar. 
+                    The dashboard will use the correct model IDs from your configuration.
+                    """)
             elif missing_models and filtered_agg.empty:
                 st.info(f"""
                  **No evaluation data found for your configured models**: {', '.join(target_models)}
