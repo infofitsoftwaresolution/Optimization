@@ -2721,22 +2721,22 @@ with tab1:
         # Premium Summary Cards
         st.header(" Executive Summary")
         
-        # Check which configured models have data - use UNFILTERED raw data for accurate check
-        # This ensures we check all data, not just filtered data
+        # Check which configured models have data - check AFTER filtering/normalization
+        # This ensures we check the actual data that will be displayed
         models_with_data = set()
-        if not agg_df.empty and "model_name" in agg_df.columns:
-            for model_name in agg_df["model_name"]:
-                cleaned = clean_model_name(model_name).strip().lower()
+        if not filtered_agg.empty and "model_name" in filtered_agg.columns:
+            for model_name in filtered_agg["model_name"].unique():
+                cleaned = clean_model_name(model_name).strip()
                 models_with_data.add(cleaned)
         
-        # Also check raw data for models that might not be aggregated yet - use UNFILTERED data
+        # Also check filtered raw data for models that might not be aggregated yet
         models_in_raw = set()
-        if not raw_df.empty and "model_name" in raw_df.columns:
-            for model_name in raw_df["model_name"].unique():
-                cleaned = clean_model_name(model_name).strip().lower()
+        if not filtered_raw.empty and "model_name" in filtered_raw.columns:
+            for model_name in filtered_raw["model_name"].unique():
+                cleaned = clean_model_name(model_name).strip()
                 models_in_raw.add(cleaned)
         
-        # Combine both sets for comprehensive check
+        # Combine both sets for comprehensive check (use original case for comparison)
         all_models_in_data = models_with_data | models_in_raw
         
         # Show helpful warning/info if some configured models don't have data
@@ -2744,23 +2744,14 @@ with tab1:
             missing_models = []
             models_with_any_data = []
             for target_model in target_models:
-                # Check if this target model has any matching data
-                has_match = False
-                target_lower = target_model.strip().lower()
+                # Check if this target model has any matching data in filtered results
+                # Since filtered data is already normalized to configured names, exact match should work
+                target_clean = target_model.strip()
+                has_match = target_clean in all_models_in_data
                 
-                # First try exact match in our combined data set
-                if target_lower in all_models_in_data:
-                    has_match = True
+                if has_match:
                     models_with_any_data.append(target_model)
                 else:
-                    # Try matching function for fuzzy matching
-                    for data_model in all_models_in_data:
-                        if matches_target_model(data_model, [target_model]):
-                            has_match = True
-                            models_with_any_data.append(target_model)
-                            break
-                
-                if not has_match:
                     missing_models.append(target_model)
             
             # Show warning only if we have some data but not all
