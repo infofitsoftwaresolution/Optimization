@@ -7,7 +7,7 @@ for SQLAlchemy ORM integration.
 
 import os
 from typing import Optional
-from sqlalchemy import create_engine, MetaData, event
+from sqlalchemy import create_engine, MetaData, event, text
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
 from sqlalchemy.pool import QueuePool
 from contextlib import contextmanager
@@ -177,7 +177,7 @@ def test_connection() -> bool:
     try:
         engine = get_engine()
         with engine.connect() as conn:
-            conn.execute("SELECT 1")
+            conn.execute(text("SELECT 1"))
         logger.info("Database connection successful")
         return True
     except Exception as e:
@@ -197,7 +197,7 @@ def health_check() -> dict:
         engine = get_engine()
         with engine.connect() as conn:
             # Check connection
-            result = conn.execute("SELECT version()")
+            result = conn.execute(text("SELECT version()"))
             version = result.scalar()
             
             # Check pool status
