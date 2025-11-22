@@ -2716,36 +2716,40 @@ with tab1:
         models_with_data = set()
         if not agg_df.empty and "model_name" in agg_df.columns:
             for model_name in agg_df["model_name"]:
-                cleaned = clean_model_name(model_name)
+                cleaned = clean_model_name(model_name).strip().lower()
                 models_with_data.add(cleaned)
         
         # Also check raw data for models that might not be aggregated yet - use UNFILTERED data
         models_in_raw = set()
         if not raw_df.empty and "model_name" in raw_df.columns:
             for model_name in raw_df["model_name"].unique():
-                cleaned = clean_model_name(model_name)
+                cleaned = clean_model_name(model_name).strip().lower()
                 models_in_raw.add(cleaned)
+        
+        # Combine both sets for comprehensive check
+        all_models_in_data = models_with_data | models_in_raw
         
         # Show helpful warning/info if some configured models don't have data
         if target_models:
             missing_models = []
             models_with_any_data = []
             for target_model in target_models:
-                # Check if this target model has any matching data in aggregated or raw
+                # Check if this target model has any matching data
                 has_match = False
-                # Check aggregated data
-                for data_model in models_with_data:
-                    if matches_target_model(data_model, [target_model]):
-                        has_match = True
-                        models_with_any_data.append(target_model)
-                        break
-                # If not found in aggregated, check raw data
-                if not has_match:
-                    for data_model in models_in_raw:
+                target_lower = target_model.strip().lower()
+                
+                # First try exact match in our combined data set
+                if target_lower in all_models_in_data:
+                    has_match = True
+                    models_with_any_data.append(target_model)
+                else:
+                    # Try matching function for fuzzy matching
+                    for data_model in all_models_in_data:
                         if matches_target_model(data_model, [target_model]):
                             has_match = True
                             models_with_any_data.append(target_model)
                             break
+                
                 if not has_match:
                     missing_models.append(target_model)
             
