@@ -2908,25 +2908,51 @@ with tab1:
                     available_in_csv.extend([clean_model_name(str(m)) for m in agg_df["model_name"].unique()[:5]])
                 available_in_csv = list(set(available_in_csv))
                 
-                # Only show warning if we truly have missing models
+                # REAL-TIME VALIDATION: Only show warning if we truly have missing models
                 # Don't show if all models have data
                 if missing_models:
-                    st.warning(f"""
-                     **⚠️ Missing Evaluation Data**
-                     
-                     The following configured models have **no data** in the CSV files:
-                     - {', '.join(missing_models)}
-                     
-                     **Available data**: {', '.join(available_in_csv[:5]) if available_in_csv else 'None'}{'...' if len(available_in_csv) > 5 else ''}
-                     
-                     **To fix this:**
-                     1. Go to the sidebar
-                     2. Make sure **all 3 models are checked**: Claude 3.7 Sonnet, Llama 3.3 70B Instruct, Nova Pro
-                     3. Enter a prompt or upload a file
-                     4. Click "▶️ Run Evaluation"
-                     
-                     The evaluation will run all selected models and save their results to the CSV files.
-                     """)
+                    # Real-time status indicator
+                    status_emoji = "🔄" if st.session_state.get('run_evaluation', False) else "⚠️"
+                    csv_time_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(csv_last_modified)) if csv_last_modified > 0 else 'Never'
+                    
+                    st.markdown(f"""
+                    <div style="
+                        background-color: #ff9800;
+                        padding: 1rem;
+                        border-radius: 8px;
+                        border-left: 4px solid #f57c00;
+                        margin: 1rem 0;
+                    ">
+                        <h4 style="margin: 0 0 0.5rem 0; color: #fff;">
+                            {status_emoji} <strong>Real-time Validation: Missing Evaluation Data</strong>
+                        </h4>
+                        <p style="margin: 0.5rem 0; color: #fff;">
+                            The following configured models have <strong>no data</strong> in the CSV files:
+                        </p>
+                        <ul style="margin: 0.5rem 0; color: #fff;">
+                            <li>{', '.join(missing_models)}</li>
+                        </ul>
+                        <p style="margin: 0.5rem 0; color: #fff;">
+                            <strong>Available data</strong>: {', '.join(available_in_csv[:5]) if available_in_csv else 'None'}{'...' if len(available_in_csv) > 5 else ''}
+                        </p>
+                        <p style="margin: 0.5rem 0; color: #fff;">
+                            <strong>CSV Last Modified</strong>: {csv_time_str}
+                        </p>
+                        <details style="margin-top: 0.5rem;">
+                            <summary style="color: #fff; cursor: pointer;"><strong>How to fix this:</strong></summary>
+                            <ol style="margin: 0.5rem 0; color: #fff; padding-left: 1.5rem;">
+                                <li>Go to the sidebar</li>
+                                <li>Make sure <strong>all 3 models are checked</strong>: Claude 3.7 Sonnet, Llama 3.3 70B Instruct, Nova Pro</li>
+                                <li>Enter a prompt or upload a file</li>
+                                <li>Click "▶️ Run Evaluation"</li>
+                            </ol>
+                            <p style="margin: 0.5rem 0; color: #fff;">
+                                The evaluation will run all selected models and save their results to the CSV files.
+                                <strong>This warning will update automatically</strong> once data is saved.
+                            </p>
+                        </details>
+                    </div>
+                    """, unsafe_allow_html=True)
             elif missing_models and filtered_agg.empty:
                 st.info(f"""
                  **No evaluation data found for your configured models**: {', '.join(target_models)}
