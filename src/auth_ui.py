@@ -47,16 +47,18 @@ def render_sign_in_page():
         st.markdown('<div class="auth-header"><h1>🔐 Sign In</h1><p>Welcome back to BellaTrix</p></div>', unsafe_allow_html=True)
         
         with st.form("signin_form"):
-            username = st.text_input("Username", placeholder="Enter your username")
+            username_or_email = st.text_input("Username or Email", placeholder="Enter your username or email")
             password = st.text_input("Password", type="password", placeholder="Enter your password")
             
             submit_button = st.form_submit_button("Sign In", use_container_width=True)
             
             if submit_button:
-                success, message = sign_in(username, password)
-                if success:
+                success, message, user_info = sign_in(username_or_email, password)
+                if success and user_info:
                     st.session_state.authenticated = True
-                    st.session_state.username = username.strip().lower()
+                    st.session_state.username = user_info['username']
+                    st.session_state.user_id = user_info['id']
+                    st.session_state.user_email = user_info['email']
                     st.success(message)
                     st.rerun()
                 else:
