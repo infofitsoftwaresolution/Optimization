@@ -21,9 +21,18 @@ class MetricsLogger:
             metrics_list: List of metric dictionaries
         """
         if not metrics_list:
+            print("⚠️ WARNING: log_metrics called with empty metrics_list!")
             return
         
+        print(f"📝 log_metrics called with {len(metrics_list)} metrics")
+        model_names = [m.get('model_name', 'unknown') for m in metrics_list]
+        print(f"   Models: {model_names}")
+        
         df = pd.DataFrame(metrics_list)
+        print(f"📊 Created DataFrame with {len(df)} rows, columns: {list(df.columns)}")
+        
+        if 'model_name' in df.columns:
+            print(f"   Model names in DataFrame: {df['model_name'].unique().tolist()}")
         
         # Convert numeric columns to proper numeric types before saving
         numeric_columns = ['input_tokens', 'output_tokens', 'latency_ms', 
@@ -126,9 +135,14 @@ class MetricsLogger:
         
         # Write or append to CSV
         try:
+            mode_str = "a" if not header else "w"
+            print(f"💾 Writing CSV: mode={mode_str}, header={header}, rows={len(df)}")
+            if 'model_name' in df.columns:
+                print(f"   Models to write: {df['model_name'].unique().tolist()}")
+            
             df.to_csv(
                 self.raw_csv_path, 
-                mode="a" if not header else "w", 
+                mode=mode_str, 
                 header=header, 
                 index=False, 
                 quoting=1,  # QUOTE_ALL - quote all fields
@@ -136,6 +150,7 @@ class MetricsLogger:
                 doublequote=True,  # Double quotes within quoted fields
                 lineterminator='\n'  # Explicit line terminator
             )
+            print(f"✅ CSV write completed successfully")
         except Exception as e:
             # If append fails (e.g., due to corrupted existing file), 
             # try to read existing data, combine, and rewrite
@@ -143,14 +158,29 @@ class MetricsLogger:
                 try:
                     existing_df = self.get_metrics_df()
                     if not existing_df.empty:
+                        print(f"⚠️ Append failed, trying to combine with existing data")
+                        print(f"   Existing rows: {len(existing_df)}, New rows: {len(df)}")
+                        if 'model_name' in existing_df.columns:
+                            print(f"   Existing models: {existing_df['model_name'].unique().tolist()}")
+                        if 'model_name' in df.columns:
+                            print(f"   New models: {df['model_name'].unique().tolist()}")
+                        
                         # Combine existing and new data
                         combined_df = pd.concat([existing_df, df], ignore_index=True)
+                        print(f"   Combined rows: {len(combined_df)}")
+                        
                         # Remove duplicates based on timestamp and model_name
+                        before_dedup = len(combined_df)
                         combined_df = combined_df.drop_duplicates(
                             subset=['timestamp', 'model_name', 'prompt_id'] if 'prompt_id' in combined_df.columns 
                             else ['timestamp', 'model_name'],
                             keep='last'
                         )
+                        after_dedup = len(combined_df)
+                        print(f"   After deduplication: {after_dedup} rows (removed {before_dedup - after_dedup})")
+                        if 'model_name' in combined_df.columns:
+                            print(f"   Final models: {combined_df['model_name'].unique().tolist()}")
+                        
                         # Write combined data
                         combined_df.to_csv(
                             self.raw_csv_path,
@@ -162,6 +192,7 @@ class MetricsLogger:
                             doublequote=True,
                             lineterminator='\n'
                         )
+                        print(f"✅ Combined data written successfully")
                     else:
                         # If we can't read existing data, just write new data
                         df.to_csv(

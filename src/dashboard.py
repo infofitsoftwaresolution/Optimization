@@ -2315,14 +2315,26 @@ with tab1:
                     metrics_logger = MetricsLogger(data_runs_dir)
                     
                     # REAL-TIME FEEDBACK: Show what we're about to save
-                    with st.expander("🔍 **Real-time Validation - Results to Save**", expanded=False):
+                    with st.expander("🔍 **Real-time Validation - Results to Save**", expanded=True):
+                        st.write(f"**Total results to save: {len(results)}**")
                         for i, r in enumerate(results):
                             status_icon = "✅" if r.get('status') == 'success' else "❌"
-                            st.write(f"{status_icon} **{i+1}.** Model: **{r.get('model_name', 'N/A')}**, Status: {r.get('status', 'N/A')}, Error: {r.get('error', 'None')}")
+                            model_name = r.get('model_name', 'N/A')
+                            status_val = r.get('status', 'N/A')
+                            error_val = r.get('error', 'None')
+                            timestamp = r.get('timestamp', 'N/A')
+                            st.write(f"{status_icon} **{i+1}.** Model: **{model_name}**, Status: {status_val}, Error: {error_val}, Timestamp: {timestamp}")
+                    
+                    # CRITICAL: Verify results list before saving
+                    st.write(f"🔍 **Pre-save verification**: About to save {len(results)} results")
+                    model_names_before_save = [r.get('model_name') for r in results]
+                    st.write(f"   Models in results list: {model_names_before_save}")
                     
                     # Save with real-time validation
                     try:
+                        st.write(f"💾 **Calling log_metrics with {len(results)} results...**")
                         metrics_logger.log_metrics(results)
+                        st.write(f"✅ **log_metrics completed**")
                     except Exception as save_error:
                         st.error(f"❌ **Save Error**: Failed to save results: {save_error}")
                         import traceback
