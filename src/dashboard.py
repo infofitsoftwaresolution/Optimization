@@ -1998,6 +1998,11 @@ with tab1:
                         # Evaluate each selected model
                         for model_idx, model in enumerate(selected_models):
                             if model is None:
+                                st.warning(f"⚠️ Model at index {model_idx} is None - skipping")
+                                continue
+                            
+                            if 'name' not in model:
+                                st.warning(f"⚠️ Model at index {model_idx} has no 'name' field - skipping")
                                 continue
                             
                             current_evaluation += 1
