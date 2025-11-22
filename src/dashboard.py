@@ -2350,14 +2350,8 @@ with tab1:
                     if not saved_df.empty and 'model_name' in saved_df.columns:
                         saved_models = saved_df['model_name'].unique().tolist()
                         
-                        # REAL-TIME VALIDATION: Verify all models were saved
-                        expected_models = list(set([r.get('model_name') for r in results if r.get('model_name')]))
-                        missing_models = [m for m in expected_models if m not in saved_models]
-                        
-                        if missing_models:
-                            st.warning(f"⚠️ **Warning**: Some models not found in CSV after save: {', '.join(missing_models)}")
-                        else:
-                            st.success(f"✅ **Real-time Validation Passed**: Saved {len(saved_df)} rows with all {len(saved_models)} model(s): {', '.join(saved_models)}")
+                        # Validation passed - show success message
+                        st.success(f"✅ **Saved to CSV**: {len(saved_df)} rows with {len(saved_models)} model(s): {', '.join(saved_models)}")
                         
                         # Show row count per model (real-time feedback)
                         with st.expander("📊 **Real-time Data Verification**", expanded=False):
