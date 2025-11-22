@@ -23,7 +23,7 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     last_login = Column(DateTime(timezone=True), nullable=True)
-    metadata = Column(JSONB, default={}, nullable=False)
+    user_metadata = Column("metadata", JSONB, default={}, nullable=False)  # Map to 'metadata' column in DB
     
     def __repr__(self):
         return f"<User(id={self.id}, username={self.username}, email={self.email})>"
