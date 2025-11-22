@@ -2938,8 +2938,12 @@ with tab1:
         else:
             filtered_agg = agg_df.copy()
         
-        # Premium Summary Cards
+        # Premium Summary Cards - Always show Executive Summary
         st.header(" Executive Summary")
+        
+        # Ensure Executive Summary is always visible, even if no data
+        if filtered_agg.empty and filtered_raw.empty:
+            st.info("💡 **No evaluation data yet.** Run an evaluation from the sidebar to see your Executive Summary.")
         
         # REAL-TIME CHECK: Check raw unfiltered CSV data directly for model names
         # Read CSV file directly from disk to bypass any caching issues
@@ -3123,9 +3127,11 @@ with tab1:
                         """, unsafe_allow_html=True)
 
         # Enhanced Interactive Visualizations
+        # Always show Interactive Analytics header
+        st.header(" Interactive Analytics")
+        
         # Ensure we use the most up-to-date synced data
         if not filtered_raw.empty and len(filtered_raw) > 0:
-            st.header(" Interactive Analytics")
             
             # Custom visualization selector
             viz_option = st.selectbox(
