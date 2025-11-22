@@ -57,7 +57,7 @@ jobs:
         target: "/home/ec2-user/Optimization/"
         strip_components: 0
 
-    - name: Set permissions and restart service
+    - name: Set permissions, update service, and restart
       uses: appleboy/ssh-action@master
       with:
         host: ${{ secrets.EC2_HOST }}
@@ -67,4 +67,20 @@ jobs:
           chmod 600 /home/ec2-user/Optimization/.env
           cd /home/ec2-user/Optimization
           git pull origin main || true
+          
+          # Update systemd service file to use wrapper script
+          if [ -f "streamlit-optimization.service" ]; then
+            sudo cp streamlit-optimization.service /etc/systemd/system/
+            sudo systemctl daemon-reload
+            echo "✅ Updated systemd service file"
+          fi
+          
+          # Make sure wrapper script is executable
+          chmod +x scripts/start-streamlit-with-secrets.sh
+          
+          # Restart service
           sudo systemctl restart streamlit-optimization.service
+          echo "✅ Service restarted"
+          
+          # Check service status
+          sudo systemctl status streamlit-optimization.service --no-pager -l | head -15
