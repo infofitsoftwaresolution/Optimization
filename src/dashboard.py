@@ -2941,10 +2941,6 @@ with tab1:
         # Premium Summary Cards - Always show Executive Summary
         st.header(" Executive Summary")
         
-        # Ensure Executive Summary is always visible, even if no data
-        if filtered_agg.empty and filtered_raw.empty:
-            st.info("💡 **No evaluation data yet.** Run an evaluation from the sidebar to see your Executive Summary.")
-        
         # REAL-TIME CHECK: Check raw unfiltered CSV data directly for model names
         # Read CSV file directly from disk to bypass any caching issues
         # This runs every time the page loads/refreshes to ensure real-time validation
@@ -3040,49 +3036,54 @@ with tab1:
             # Info message removed per user request
             pass
         
-        if not filtered_agg.empty:
-            col1, col2, col3, col4 = st.columns(4)
+        # Always show Executive Summary cards, even if no data
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            total_evaluations = len(filtered_raw) if not filtered_raw.empty else 0
+            st.markdown("""
+            <div class="metric-highlight">
+                <h3 style="margin: 0; font-size: 2rem; color: white; font-weight: 700;">{:,}</h3>
+                <p style="margin: 0.5rem 0 0 0; opacity: 0.9; color: white;">Total Evaluations</p>
+            </div>
+            """.format(total_evaluations), unsafe_allow_html=True)
+        
+        with col2:
+            success_rate = 0
+            if not filtered_raw.empty and "status" in filtered_raw.columns:
+                total = len(filtered_raw)
+                success = len(filtered_raw[filtered_raw["status"] == "success"])
+                success_rate = (success / total * 100) if total > 0 else 0
             
-            with col1:
-                st.markdown("""
-                <div class="metric-highlight">
-                    <h3 style="margin: 0; font-size: 2rem; color: white; font-weight: 700;">{:,}</h3>
-                    <p style="margin: 0.5rem 0 0 0; opacity: 0.9; color: white;">Total Evaluations</p>
-                </div>
-                """.format(len(filtered_raw) if not filtered_raw.empty else 0), unsafe_allow_html=True)
-            
-            with col2:
-                success_rate = 0
-                if not filtered_raw.empty and "status" in filtered_raw.columns:
-                    total = len(filtered_raw)
-                    success = len(filtered_raw[filtered_raw["status"] == "success"])
-                    success_rate = (success / total * 100) if total > 0 else 0
-                
-                success_color = "#00b09b" if success_rate >= 90 else "#eea849"
-                st.markdown(f"""
-                <div class="premium-card" style="text-align: center; background: linear-gradient(135deg, {success_color} 0%, #96c93d 100%); color: white;">
-                    <h3 style="margin: 0; font-size: 2rem;">{success_rate:.1f}%</h3>
-                    <p style="margin: 0; opacity: 0.9;">Success Rate</p>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with col3:
-                total_cost = filtered_agg["total_cost_usd"].sum() if "total_cost_usd" in filtered_agg.columns else 0
-                st.markdown(f"""
-                <div class="premium-card" style="text-align: center;">
-                    <h3 style="margin: 0; font-size: 2rem; color: #333; font-weight: 700;">${total_cost:.4f}</h3>
-                    <p style="margin: 0.5rem 0 0 0; color: #666; font-weight: 500;">Total Cost</p>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with col4:
-                num_models = len(filtered_agg)
-                st.markdown(f"""
-                <div class="premium-card" style="text-align: center;">
-                    <h3 style="margin: 0; font-size: 2rem; color: #333; font-weight: 700;">{num_models}</h3>
-                    <p style="margin: 0.5rem 0 0 0; color: #666; font-weight: 500;">Models Compared</p>
-                </div>
-                """, unsafe_allow_html=True)
+            success_color = "#00b09b" if success_rate >= 90 else "#eea849" if success_rate > 0 else "#999"
+            st.markdown(f"""
+            <div class="premium-card" style="text-align: center; background: linear-gradient(135deg, {success_color} 0%, #96c93d 100%); color: white;">
+                <h3 style="margin: 0; font-size: 2rem;">{success_rate:.1f}%</h3>
+                <p style="margin: 0; opacity: 0.9;">Success Rate</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col3:
+            total_cost = filtered_agg["total_cost_usd"].sum() if not filtered_agg.empty and "total_cost_usd" in filtered_agg.columns else 0
+            st.markdown(f"""
+            <div class="premium-card" style="text-align: center;">
+                <h3 style="margin: 0; font-size: 2rem; color: #333; font-weight: 700;">${total_cost:.4f}</h3>
+                <p style="margin: 0.5rem 0 0 0; color: #666; font-weight: 500;">Total Cost</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col4:
+            num_models = len(filtered_agg) if not filtered_agg.empty else 0
+            st.markdown(f"""
+            <div class="premium-card" style="text-align: center;">
+                <h3 style="margin: 0; font-size: 2rem; color: #333; font-weight: 700;">{num_models}</h3>
+                <p style="margin: 0.5rem 0 0 0; color: #666; font-weight: 500;">Models Compared</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # Show message if no data
+        if filtered_agg.empty and filtered_raw.empty:
+            st.info("💡 **No evaluation data yet.** Run an evaluation from the sidebar to populate these metrics.")
 
         # Enhanced Best Performers Section
         if not filtered_agg.empty and len(filtered_agg) > 0:
@@ -3121,15 +3122,15 @@ with tab1:
         # Always show Interactive Analytics header
         st.header(" Interactive Analytics")
         
+        # Always show visualization selector
+        viz_option = st.selectbox(
+            "Choose Visualization Type",
+            ["Performance Dashboard", "Cost Analysis", "Quality Metrics", "Token Usage"],
+            help="Select which metrics to visualize"
+        )
+        
         # Ensure we use the most up-to-date synced data
         if not filtered_raw.empty and len(filtered_raw) > 0:
-            
-            # Custom visualization selector
-            viz_option = st.selectbox(
-                "Choose Visualization Type",
-                ["Performance Dashboard", "Cost Analysis", "Quality Metrics", "Token Usage"],
-                help="Select which metrics to visualize"
-            )
             
             # Use synced data - ensure fresh copy from loaded data
             success_df = filtered_raw[filtered_raw["status"] == "success"].copy() if "status" in filtered_raw.columns else filtered_raw.copy()
@@ -3222,19 +3223,12 @@ with tab1:
                                         color_discrete_sequence=px.colors.qualitative.Pastel)
                             fig.update_layout(showlegend=False, height=400, template="plotly_white")
                             st.plotly_chart(fig, use_container_width=True)
+        else:
+            # Show placeholder when no data available
+            st.info(f"💡 **No evaluation data available for {viz_option}.** Run an evaluation from the sidebar to see visualizations.")
     else:
-        # Empty state with call to action
-        st.markdown("""
-        <div class="premium-card" style="text-align: center; padding: 4rem;">
-            <h2 style="color: #667eea;"> No Data Yet</h2>
-            <p style="color: #666; font-size: 1.1rem; margin-bottom: 2rem;">
-                Start by testing your first prompt to see beautiful analytics!
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        if st.button(" Test Your First Prompt", type="primary", use_container_width=True):
-            st.info(" Use the sidebar to run evaluations!")
+        # Empty state when filtered_raw is empty
+        st.info(f"💡 **No evaluation data available for {viz_option}.** Run an evaluation from the sidebar to see visualizations.")
 
 # ==========================================
 # TAB 2: Premium Historical Results
