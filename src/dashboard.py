@@ -1651,10 +1651,40 @@ with st.sidebar:
                     pricing = sidebar_registry.get_model_pricing(model)
                     pricing_info = f"${pricing['input_per_1k_tokens_usd']:.4f}/1k in, ${pricing['output_per_1k_tokens_usd']:.4f}/1k out"
                     
-                    if st.checkbox(f"{name}", key=f"model_sidebar_{name}", help=f"Pricing: {pricing_info}"):
+                    # Checkbox with real-time validation
+                    checkbox_value = st.checkbox(
+                        f"{name}", 
+                        key=f"model_sidebar_{name}", 
+                        help=f"Pricing: {pricing_info}",
+                        on_change=None  # We'll validate after all checkboxes
+                    )
+                    
+                    if checkbox_value:
                         selected_model_names.append(name)
                 
+                # REAL-TIME VALIDATION: Validate immediately after checkbox changes
                 st.session_state.selected_models = selected_model_names
+                
+                # Show real-time validation feedback
+                if selected_model_names:
+                    st.success(f"✅ **{len(selected_model_names)} model(s) selected**: {', '.join(selected_model_names)}")
+                    
+                    # Validate each selected model exists in registry
+                    invalid_models = []
+                    for model_name in selected_model_names:
+                        if model_name not in model_options:
+                            invalid_models.append(model_name)
+                    
+                    if invalid_models:
+                        st.error(f"❌ **Validation Error**: Invalid model(s) detected: {', '.join(invalid_models)}")
+                    else:
+                        # Check if at least one model is selected for evaluation
+                        if len(selected_model_names) == 0:
+                            st.warning("⚠️ **Warning**: No models selected. Please select at least one model to run evaluation.")
+                        elif len(selected_model_names) < len(available_models):
+                            st.info(f"ℹ️ **Info**: {len(available_models) - len(selected_model_names)} model(s) not selected. All models will be evaluated if none are explicitly selected.")
+                else:
+                    st.warning("⚠️ **Warning**: No models selected. Please select at least one model to run evaluation.")
             else:
                 st.warning(" No models configured")
                 st.session_state.selected_models = []
