@@ -44,9 +44,30 @@ def check_csv_files():
             models = raw_df['model_name'].unique().tolist()
             print(f"\nModels in CSV file ({len(models)}):")
             for model in models:
-                count = len(raw_df[raw_df['model_name'] == model])
-                statuses = raw_df[raw_df['model_name'] == model]['status'].value_counts().to_dict()
+                model_data = raw_df[raw_df['model_name'] == model]
+                count = len(model_data)
+                statuses = model_data['status'].value_counts().to_dict()
                 print(f"  - {model}: {count} rows, status: {statuses}")
+                
+                # Show error details if any
+                if 'error' in model_data['status'].values:
+                    error_rows = model_data[model_data['status'] == 'error']
+                    if 'error_message' in error_rows.columns:
+                        errors = error_rows['error_message'].dropna().unique()
+                        if len(errors) > 0:
+                            print(f"    Error messages:")
+                            for err in errors[:3]:  # Show first 3 errors
+                                err_str = str(err)[:100]  # Truncate long errors
+                                print(f"      - {err_str}")
+                elif 'error' in raw_df.columns:
+                    error_rows = model_data[model_data['status'] == 'error']
+                    if len(error_rows) > 0 and 'error' in error_rows.columns:
+                        errors = error_rows['error'].dropna().unique()
+                        if len(errors) > 0:
+                            print(f"    Errors:")
+                            for err in errors[:3]:
+                                err_str = str(err)[:100]
+                                print(f"      - {err_str}")
         else:
             print("⚠️  'model_name' column not found in CSV")
             print(f"   Available columns: {list(raw_df.columns)}")
