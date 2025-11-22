@@ -80,8 +80,11 @@ def sign_up(username: str, email: str, password: str) -> Tuple[bool, str]:
         logger.error(f"Database integrity error during sign up: {e}")
         return False, "Registration failed. Username or email may already exist."
     except Exception as e:
-        logger.error(f"Error during sign up: {e}")
-        return False, f"Registration failed: {str(e)}"
+        logger.error(f"Error during sign up: {e}", exc_info=True)
+        import traceback
+        error_details = traceback.format_exc()
+        logger.error(f"Full traceback: {error_details}")
+        return False, f"Registration failed: {str(e)}. Please check server logs."
 
 
 def sign_in(username_or_email: str, password: str) -> Tuple[bool, str, Optional[dict]]:
@@ -133,8 +136,11 @@ def sign_in(username_or_email: str, password: str) -> Tuple[bool, str, Optional[
             return True, "Sign in successful!", user_info
             
     except Exception as e:
-        logger.error(f"Error during sign in: {e}")
-        return False, f"Sign in failed: {str(e)}", None
+        logger.error(f"Error during sign in: {e}", exc_info=True)
+        import traceback
+        error_details = traceback.format_exc()
+        logger.error(f"Full traceback: {error_details}")
+        return False, f"Sign in failed: {str(e)}. Please check server logs.", None
 
 
 def is_authenticated() -> bool:
