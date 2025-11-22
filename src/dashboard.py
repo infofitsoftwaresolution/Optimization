@@ -721,8 +721,7 @@ with st.sidebar:
             placeholder="Enter your prompt here...",
             help=" Tip: Be specific about your expected output format for better analysis.",
             key="custom_prompt_input_sidebar",
-            label_visibility="visible",
-            autocomplete="off"
+            label_visibility="visible"
         )
     
     # File Upload Section in Sidebar
