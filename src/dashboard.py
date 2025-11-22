@@ -2574,10 +2574,8 @@ with tab1:
                 if not filtered_raw.empty:
                     filtered_raw["model_name"] = filtered_raw["model_name"].apply(normalize_to_configured)
                 
-                # Double-check: ensure all remaining rows match configured models
-                if not filtered_raw.empty:
-                    final_mask = filtered_raw["model_name"].apply(lambda x: matches_target_model(x, target_models))
-                    filtered_raw = filtered_raw[final_mask].copy()
+                # After normalization, model names should match configured models
+                # No need for additional filtering - normalization already ensures correct names
                 
                 # If no matches found, don't show fallback data - keep it empty
                 # This ensures we only show configured models
