@@ -154,10 +154,14 @@ def get_db_session():
 
 
 def init_db():
-    """Initialize database schema (create all tables)."""
+    """
+    Initialize database schema (create all tables if they don't exist).
+    This function is idempotent - it won't recreate existing tables.
+    """
     engine = get_engine()
+    # create_all() only creates tables that don't exist - it's safe to call multiple times
     Base.metadata.create_all(bind=engine)
-    logger.info("Database schema initialized")
+    logger.info("Database schema initialized (tables created if they didn't exist)")
 
 
 def drop_db():

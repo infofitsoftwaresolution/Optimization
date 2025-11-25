@@ -57,11 +57,12 @@ if "page" not in st.session_state:
     st.session_state.page = "signin"  # Default to sign-in page
 
 # Initialize database tables on first run (only once per session)
+# init_db() is idempotent - it only creates tables that don't already exist
 if "db_initialized" not in st.session_state:
     try:
         # Test connection first
         if test_connection():
-            # Create tables if they don't exist
+            # Create tables if they don't exist (safe to call even if tables already exist)
             init_db()
             st.session_state.db_initialized = True
         else:
