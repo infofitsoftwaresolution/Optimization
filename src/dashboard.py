@@ -3179,8 +3179,8 @@ with tab1:
                         """, unsafe_allow_html=True)
 
         # Enhanced Interactive Visualizations
-        # Always show Interactive Analytics header
-        st.header(" Interactive Analytics")
+        # Always show Interactive Analytics header - ensure it's always visible
+        st.header("📊 Interactive Analytics")
         
         # REAL-TIME: Add auto-refresh button and auto-refresh toggle
         refresh_col1, refresh_col2, refresh_col3 = st.columns([2, 1, 1])
@@ -3226,6 +3226,7 @@ with tab1:
         
         # Use the already-filtered data from above (filtered_raw and filtered_agg)
         # This ensures consistency and real-time updates
+        # Always show the section, even if no data - show placeholder message
         if not filtered_raw.empty and len(filtered_raw) > 0:
             
             # Use synced data - ensure fresh copy from loaded data
