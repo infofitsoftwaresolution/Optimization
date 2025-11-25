@@ -11,6 +11,9 @@ from datetime import datetime
 from dotenv import load_dotenv
 import time
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -38,6 +41,9 @@ from src.auth import is_authenticated, get_current_user, sign_out
 from src.auth_ui import render_sign_in_page, render_sign_up_page
 from src.landing_page import render_landing_page
 
+# Import database initialization
+from database.connection import init_db, test_connection
+
 # Initialize the rerun counter for checkbox interactions
 if "checkbox_rerun_counter" not in st.session_state:
     st.session_state.checkbox_rerun_counter = 0
@@ -49,6 +55,21 @@ if "username" not in st.session_state:
     st.session_state.username = None
 if "page" not in st.session_state:
     st.session_state.page = "signin"  # Default to sign-in page
+
+# Initialize database tables on first run (only once per session)
+if "db_initialized" not in st.session_state:
+    try:
+        # Test connection first
+        if test_connection():
+            # Create tables if they don't exist
+            init_db()
+            st.session_state.db_initialized = True
+        else:
+            st.session_state.db_initialized = False
+            logger.warning("Database connection failed - tables may not be created")
+    except Exception as e:
+        st.session_state.db_initialized = False
+        logger.error(f"Failed to initialize database: {e}")
 
 
 def extract_full_prompt_text(item: dict) -> str:
