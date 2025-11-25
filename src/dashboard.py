@@ -58,26 +58,37 @@ if "page" not in st.session_state:
 
 # Initialize database tables on first run (only once per session)
 # init_db() is idempotent - it only creates tables that don't already exist
-# Wrapped in try-except to prevent application crash if DB is unavailable
+# Wrapped in comprehensive try-except to prevent application crash if DB is unavailable
 if "db_initialized" not in st.session_state:
     try:
-        # Test connection first
-        if test_connection():
+        # Test connection first - wrap in try-except to handle any import/connection errors
+        connection_ok = False
+        try:
+            connection_ok = test_connection()
+        except Exception as conn_error:
+            logger.warning(f"Database connection test failed: {conn_error}. App will continue.")
+            connection_ok = False
+        
+        if connection_ok:
             try:
                 # Create tables if they don't exist (safe to call even if tables already exist)
                 init_db()
                 st.session_state.db_initialized = True
             except Exception as init_error:
                 # Log but don't crash - app can still work if tables already exist
-                logger.warning(f"Database initialization warning: {init_error}")
+                logger.warning(f"Database initialization warning (non-fatal): {init_error}")
                 st.session_state.db_initialized = True  # Mark as initialized to avoid retrying
         else:
             st.session_state.db_initialized = False
-            logger.warning("Database connection failed - tables may not be created")
+            logger.warning("Database connection failed - tables may not be created. App will continue.")
     except Exception as e:
-        # Don't crash the app if database initialization fails
+        # Catch-all: Don't crash the app for any database-related error
         st.session_state.db_initialized = False
-        logger.warning(f"Database initialization skipped: {e}. App will continue without auto-creating tables.")
+        try:
+            logger.warning(f"Database initialization skipped (non-fatal): {e}. App will continue without auto-creating tables.")
+        except:
+            # Even logging might fail, so use print as fallback
+            print(f"Warning: Database initialization skipped. App will continue.")
 
 
 def extract_full_prompt_text(item: dict) -> str:
