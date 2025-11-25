@@ -58,19 +58,26 @@ if "page" not in st.session_state:
 
 # Initialize database tables on first run (only once per session)
 # init_db() is idempotent - it only creates tables that don't already exist
+# Wrapped in try-except to prevent application crash if DB is unavailable
 if "db_initialized" not in st.session_state:
     try:
         # Test connection first
         if test_connection():
-            # Create tables if they don't exist (safe to call even if tables already exist)
-            init_db()
-            st.session_state.db_initialized = True
+            try:
+                # Create tables if they don't exist (safe to call even if tables already exist)
+                init_db()
+                st.session_state.db_initialized = True
+            except Exception as init_error:
+                # Log but don't crash - app can still work if tables already exist
+                logger.warning(f"Database initialization warning: {init_error}")
+                st.session_state.db_initialized = True  # Mark as initialized to avoid retrying
         else:
             st.session_state.db_initialized = False
             logger.warning("Database connection failed - tables may not be created")
     except Exception as e:
+        # Don't crash the app if database initialization fails
         st.session_state.db_initialized = False
-        logger.error(f"Failed to initialize database: {e}")
+        logger.warning(f"Database initialization skipped: {e}. App will continue without auto-creating tables.")
 
 
 def extract_full_prompt_text(item: dict) -> str:
