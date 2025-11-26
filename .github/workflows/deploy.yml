@@ -25,6 +25,24 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     
+    - name: Prepare deployment archive
+      run: |
+        # Create file list excluding unwanted files/directories
+        find . -type f \
+          ! -path './.git/*' \
+          ! -path './.github/*' \
+          ! -path '*/__pycache__/*' \
+          ! -name '*.pyc' \
+          ! -path './.venv/*' \
+          ! -path './node_modules/*' \
+          ! -name '.env.example' \
+          ! -name '.env' \
+          ! -name 'deployment.tar.gz' \
+          > /tmp/files_to_archive.txt
+        
+        # Create tar archive from file list
+        tar -czf deployment.tar.gz -T /tmp/files_to_archive.txt
+    
     - name: Create .env file from secrets
       run: |
         cat > .env << EOF
@@ -46,18 +64,6 @@ jobs:
         # Streamlit Configuration
         STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
         EOF
-    
-    - name: Prepare deployment archive
-      run: |
-        tar --exclude='.git' \
-            --exclude='.github' \
-            --exclude='__pycache__' \
-            --exclude='*.pyc' \
-            --exclude='.venv' \
-            --exclude='node_modules' \
-            --exclude='.env.example' \
-            --exclude='.env' \
-            -czf deployment.tar.gz .
 
     - name: Deploy code to EC2 via SSH
       uses: appleboy/ssh-action@master
