@@ -47,24 +47,65 @@ jobs:
         STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
         EOF
     
-    - name: Deploy code to EC2
+    - name: Prepare deployment archive
+      run: |
+        tar --exclude='.git' \
+            --exclude='.github' \
+            --exclude='__pycache__' \
+            --exclude='*.pyc' \
+            --exclude='.venv' \
+            --exclude='node_modules' \
+            --exclude='.env.example' \
+            --exclude='.env' \
+            -czf deployment.tar.gz .
+
+    - name: Deploy code to EC2 via SSH
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        script: |
+          mkdir -p /home/ec2-user/Optimization
+          cd /home/ec2-user/Optimization
+          # Backup .env if it exists (will be overwritten by new .env)
+          if [ -f ".env" ]; then
+            cp .env /tmp/optimization_env_backup
+          fi
+          # Backup .venv if it exists
+          if [ -d ".venv" ]; then
+            mv .venv /tmp/optimization_venv_backup
+          fi
+          # Remove old files (we'll restore .env and .venv after extraction)
+          find . -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+
+    - name: Copy deployment archive to EC2
       uses: appleboy/scp-action@master
       with:
         host: ${{ secrets.EC2_HOST }}
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
-        source: "."
-        target: "/home/ec2-user/"
+        source: "deployment.tar.gz"
+        target: "/home/ec2-user/Optimization/"
         strip_components: 0
-        rm: false
-        exclude: |
-          .git
-          .github
-          __pycache__
-          *.pyc
-          .venv
-          node_modules
-          .env.example
+
+    - name: Extract code and restore backups on EC2
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        script: |
+          cd /home/ec2-user/Optimization
+          tar -xzf deployment.tar.gz
+          rm deployment.tar.gz
+          # Restore .venv backup if it existed (saves time on dependency installation)
+          if [ -d "/tmp/optimization_venv_backup" ]; then
+            rm -rf .venv
+            mv /tmp/optimization_venv_backup .venv
+            echo "✅ Restored existing virtual environment"
+          fi
+          # .env will be deployed in the next step, so we don't restore the old one
 
     - name: Deploy .env file to EC2
       uses: appleboy/scp-action@master
@@ -106,8 +147,27 @@ jobs:
           # Set permissions on .env file
           chmod 600 /home/ec2-user/Optimization/.env || echo "⚠️  .env file not found, will be created later"
           
-          # Code is already deployed via SCP, so we just verify it's there
-          echo "✅ Code deployed via SCP"
+          # Verify code was deployed via SCP
+          echo "🔍 Verifying deployed files..."
+          echo "Current directory: $(pwd)"
+          echo "Directory contents:"
+          ls -la
+          echo ""
+          echo "Checking for key files:"
+          if [ ! -f "requirements.txt" ]; then
+            echo "❌ ERROR: requirements.txt not found!"
+            echo "Files in current directory:"
+            find . -maxdepth 1 -type f | head -20
+            echo ""
+            echo "Directories in current directory:"
+            find . -maxdepth 1 -type d
+            exit 1
+          fi
+          if [ ! -d "src" ]; then
+            echo "❌ ERROR: src directory not found!"
+            exit 1
+          fi
+          echo "✅ Key files verified"
           
           # Optionally try to update via git if it's a git repository (non-blocking)
           if [ -d ".git" ] && command -v git &> /dev/null; then
