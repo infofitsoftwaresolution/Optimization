@@ -15,6 +15,13 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
     
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+    
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
@@ -78,6 +85,9 @@ jobs:
         DB_USER=${{ secrets.DB_USER }}
         DB_PASSWORD=${{ secrets.DB_PASSWORD }}
         DB_SSLMODE=prefer
+        # Optional: Master credentials for automatic user creation (if DB_USER doesn't exist)
+        DB_MASTER_USER=${{ secrets.DB_MASTER_USER }}
+        DB_MASTER_PASSWORD=${{ secrets.DB_MASTER_PASSWORD }}
         
         # OpenAI API Key (Optional)
         OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
@@ -140,6 +150,150 @@ jobs:
           rm deployment.tar.gz
           # Don't restore .venv - we'll create a fresh one to avoid conflicts
           # .env will be deployed in the next step
+
+    - name: Automatically configure RDS security group
+      run: |
+        echo "🔧 Automatically configuring RDS security group..."
+        
+        # Extract RDS endpoint from DB_HOST secret
+        DB_HOST="${{ secrets.DB_HOST }}"
+        EC2_HOST="${{ secrets.EC2_HOST }}"
+        AWS_REGION="${{ secrets.AWS_REGION }}"
+        
+        echo "RDS Endpoint: $DB_HOST"
+        echo "EC2 Host: $EC2_HOST"
+        echo "AWS Region: $AWS_REGION"
+        
+        # Get RDS instance identifier
+        RDS_ID=$(aws rds describe-db-instances \
+          --region "$AWS_REGION" \
+          --query "DBInstances[?Endpoint.Address=='$DB_HOST'].DBInstanceIdentifier" \
+          --output text 2>/dev/null || echo "")
+        
+        if [ -z "$RDS_ID" ]; then
+          echo "⚠️  Could not find RDS instance for endpoint: $DB_HOST"
+          echo "   Skipping automatic security group configuration"
+          exit 0
+        fi
+        
+        echo "Found RDS instance: $RDS_ID"
+        
+        # Get EC2 instance ID from hostname/IP
+        # Try to find EC2 instance by public IP or private IP
+        EC2_INSTANCE_ID=$(aws ec2 describe-instances \
+          --region "$AWS_REGION" \
+          --filters "Name=ip-address,Values=$EC2_HOST" "Name=instance-state-name,Values=running" \
+          --query 'Reservations[0].Instances[0].InstanceId' \
+          --output text 2>/dev/null || \
+          aws ec2 describe-instances \
+          --region "$AWS_REGION" \
+          --filters "Name=private-ip-address,Values=$EC2_HOST" "Name=instance-state-name,Values=running" \
+          --query 'Reservations[0].Instances[0].InstanceId' \
+          --output text 2>/dev/null || echo "")
+        
+        if [ -z "$EC2_INSTANCE_ID" ] || [ "$EC2_INSTANCE_ID" == "None" ]; then
+          echo "⚠️  Could not find EC2 instance for host: $EC2_HOST"
+          echo "   Will try to add rule using IP address instead"
+          EC2_SG=""
+        else
+          echo "Found EC2 instance: $EC2_INSTANCE_ID"
+          
+          # Get EC2 security group
+          EC2_SG=$(aws ec2 describe-instances \
+            --region "$AWS_REGION" \
+            --instance-ids "$EC2_INSTANCE_ID" \
+            --query 'Reservations[0].Instances[0].SecurityGroups[0].GroupId' \
+            --output text 2>/dev/null || echo "")
+          
+          if [ -n "$EC2_SG" ] && [ "$EC2_SG" != "None" ]; then
+            echo "Found EC2 security group: $EC2_SG"
+          fi
+        fi
+        
+        # Get RDS security groups
+        RDS_SGS=$(aws rds describe-db-instances \
+          --region "$AWS_REGION" \
+          --db-instance-identifier "$RDS_ID" \
+          --query 'DBInstances[0].VpcSecurityGroups[*].VpcSecurityGroupId' \
+          --output text 2>/dev/null || echo "")
+        
+        if [ -z "$RDS_SGS" ] || [ "$RDS_SGS" == "None" ]; then
+          echo "⚠️  Could not retrieve RDS security groups"
+          exit 0
+        fi
+        
+        echo "RDS Security Groups: $RDS_SGS"
+        
+        # Configure each RDS security group
+        for RDS_SG in $RDS_SGS; do
+          echo ""
+          echo "Configuring RDS security group: $RDS_SG"
+          
+          # Check if rule already exists
+          EXISTING_RULE=""
+          if [ -n "$EC2_SG" ]; then
+            EXISTING_RULE=$(aws ec2 describe-security-group-rules \
+              --region "$AWS_REGION" \
+              --filters "Name=group-id,Values=$RDS_SG" "Name=ip-protocol,Values=tcp" "Name=from-port,Values=5432" "Name=to-port,Values=5432" \
+              --query "SecurityGroupRules[?ReferencedGroupInfo.GroupId==\`$EC2_SG\`].SecurityGroupRuleId" \
+              --output text 2>/dev/null || echo "")
+          fi
+          
+          if [ -n "$EXISTING_RULE" ] && [ "$EXISTING_RULE" != "None" ]; then
+            echo "✅ Security group rule already exists (rule: $EXISTING_RULE)"
+          else
+            # Try to add rule with EC2 security group as source
+            if [ -n "$EC2_SG" ] && [ "$EC2_SG" != "None" ]; then
+              echo "Adding rule: PostgreSQL (5432) from EC2 security group $EC2_SG"
+              if aws ec2 authorize-security-group-ingress \
+                --region "$AWS_REGION" \
+                --group-id "$RDS_SG" \
+                --protocol tcp \
+                --port 5432 \
+                --source-group "$EC2_SG" \
+                2>/dev/null; then
+                echo "✅ Successfully added security group rule"
+              else
+                ERROR_CODE=$?
+                if [ $ERROR_CODE -eq 254 ]; then
+                  echo "✅ Rule may already exist (duplicate rule error)"
+                else
+                  echo "⚠️  Failed to add rule with security group, trying with IP..."
+                  # Fallback: Get EC2 private IP and add rule
+                  EC2_PRIVATE_IP=$(aws ec2 describe-instances \
+                    --region "$AWS_REGION" \
+                    --instance-ids "$EC2_INSTANCE_ID" \
+                    --query 'Reservations[0].Instances[0].PrivateIpAddress' \
+                    --output text 2>/dev/null || echo "")
+                  
+                  if [ -n "$EC2_PRIVATE_IP" ] && [ "$EC2_PRIVATE_IP" != "None" ]; then
+                    echo "Adding rule: PostgreSQL (5432) from EC2 IP $EC2_PRIVATE_IP/32"
+                    if aws ec2 authorize-security-group-ingress \
+                      --region "$AWS_REGION" \
+                      --group-id "$RDS_SG" \
+                      --protocol tcp \
+                      --port 5432 \
+                      --cidr "$EC2_PRIVATE_IP/32" \
+                      2>/dev/null; then
+                      echo "✅ Successfully added security group rule with IP"
+                    else
+                      echo "⚠️  Could not add security group rule automatically"
+                      echo "   Error code: $?"
+                    fi
+                  fi
+                fi
+              fi
+            else
+              echo "⚠️  EC2 security group not found, cannot add rule automatically"
+              echo "   Please add manually: PostgreSQL (5432) from EC2 instance"
+            fi
+          fi
+        done
+        
+        echo ""
+        echo "✅ RDS security group configuration completed"
+        echo "   Waiting 10 seconds for changes to propagate..."
+        sleep 10
 
     - name: Deploy .env file to EC2
       uses: appleboy/scp-action@v0.1.7
@@ -440,30 +594,70 @@ jobs:
                   echo "Error output:"
                   echo "$CONNECTION_OUTPUT" | head -3
                   echo ""
-                  echo "🔧 Fix Steps:"
-                  echo ""
-                  echo "1. RDS Security Group (MOST IMPORTANT):"
-                  echo "   - Go to: RDS Console → Databases → optimization.c3ea24kmsrmf.ap-south-1.rds.amazonaws.com"
-                  echo "   - Click 'Connectivity & security' tab"
-                  echo "   - Under 'VPC security groups', click the security group link"
-                  echo "   - Click 'Edit inbound rules' → 'Add rule'"
-                  echo "   - Type: PostgreSQL, Port: 5432"
-                  echo "   - Source: Select 'Custom' → Choose EC2 security group 'launch-wizard-10'"
-                  echo "   - OR Source: Custom IP $EC2_IP/32"
-                  echo "   - Click 'Save rules'"
-                  echo ""
-                  echo "2. Verify Database Credentials in GitHub Secrets:"
-                  echo "   - DB_USER: '$DB_USER' (case-sensitive! PostgreSQL usernames are case-sensitive)"
-                  echo "   - DB_PASSWORD: Verify it matches RDS master password"
-                  echo "   - DB_NAME: '${DB_NAME:-postgres}'"
-                  echo "   - DB_HOST: '$DB_HOST'"
-                  echo ""
-                  echo "3. Verify Database User Exists:"
-                  echo "   - Connect to RDS as master user"
-                  echo "   - Run: SELECT usename FROM pg_user WHERE usename = '$DB_USER';"
-                  echo "   - If user doesn't exist, create it:"
-                  echo "     CREATE USER \"$DB_USER\" WITH PASSWORD 'your_password';"
-                  echo "     GRANT CONNECT ON DATABASE ${DB_NAME:-postgres} TO \"$DB_USER\";"
+                  
+                  # Try to automatically create user if master credentials are available
+                  if [ -n "$DB_MASTER_USER" ] && [ -n "$DB_MASTER_PASSWORD" ]; then
+                    echo "🔧 Attempting to automatically create database user..."
+                    export PGPASSWORD="$DB_MASTER_PASSWORD"
+                    
+                    # Check if user exists
+                    USER_EXISTS=$(psql -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "$DB_MASTER_USER" -d "postgres" -tAc "SELECT 1 FROM pg_user WHERE usename = '$DB_USER';" 2>/dev/null || echo "0")
+                    
+                    if [ "$USER_EXISTS" != "1" ]; then
+                      echo "User '$DB_USER' does not exist, creating..."
+                      
+                      # Create user with password
+                      CREATE_USER_SQL="CREATE USER \"$DB_USER\" WITH PASSWORD '$DB_PASSWORD';"
+                      if psql -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "$DB_MASTER_USER" -d "postgres" -c "$CREATE_USER_SQL" 2>/dev/null; then
+                        echo "✅ User '$DB_USER' created successfully"
+                        
+                        # Grant permissions
+                        GRANT_SQL="GRANT CONNECT ON DATABASE ${DB_NAME:-postgres} TO \"$DB_USER\";"
+                        psql -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "$DB_MASTER_USER" -d "postgres" -c "$GRANT_SQL" 2>/dev/null || true
+                        
+                        # Grant schema usage
+                        GRANT_SCHEMA_SQL="GRANT USAGE ON SCHEMA public TO \"$DB_USER\"; GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO \"$DB_USER\";"
+                        psql -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "$DB_MASTER_USER" -d "${DB_NAME:-postgres}" -c "$GRANT_SCHEMA_SQL" 2>/dev/null || true
+                        
+                        echo "✅ Permissions granted to user '$DB_USER'"
+                        
+                        # Test connection again
+                        unset PGPASSWORD
+                        export PGPASSWORD="$DB_PASSWORD"
+                        if psql -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "$DB_USER" -d "${DB_NAME:-postgres}" -c "SELECT 1;" &>/dev/null 2>&1; then
+                          echo "✅ Database connection successful after creating user"
+                        else
+                          echo "⚠️  User created but connection still fails - check password"
+                        fi
+                      else
+                        echo "⚠️  Failed to create user automatically"
+                      fi
+                    else
+                      echo "User '$DB_USER' already exists"
+                      echo "⚠️  Connection failed - password may be incorrect"
+                    fi
+                    unset PGPASSWORD
+                  else
+                    echo "⚠️  DB_MASTER_USER and DB_MASTER_PASSWORD not set in secrets"
+                    echo "   Cannot automatically create database user"
+                    echo ""
+                    echo "🔧 Manual Fix Steps:"
+                    echo ""
+                    echo "1. RDS Security Group (should be auto-configured above):"
+                    echo "   - Check if security group rule was added automatically"
+                    echo "   - If not, add manually: PostgreSQL (5432) from EC2 security group"
+                    echo ""
+                    echo "2. Database User:"
+                    echo "   - Connect to RDS as master user"
+                    echo "   - Run: SELECT usename FROM pg_user WHERE usename = '$DB_USER';"
+                    echo "   - If user doesn't exist, create it:"
+                    echo "     CREATE USER \"$DB_USER\" WITH PASSWORD '$DB_PASSWORD';"
+                    echo "     GRANT CONNECT ON DATABASE ${DB_NAME:-postgres} TO \"$DB_USER\";"
+                    echo ""
+                    echo "3. Verify Credentials:"
+                    echo "   - DB_USER: '$DB_USER' (case-sensitive!)"
+                    echo "   - DB_PASSWORD: Must match the password set for user '$DB_USER'"
+                  fi
                 fi
                 unset PGPASSWORD
               else
