@@ -30,6 +30,16 @@ jobs:
           pip install -r requirements.txt
         fi
     
+    - name: Create nginx config with IP from secrets
+      run: |
+        # Read the nginx template and replace server_name with IP from secrets
+        if [ -f "nginx-optimization-app.conf" ]; then
+          sed "s/server_name _;/server_name ${{ secrets.EC2_HOST }};/" nginx-optimization-app.conf > nginx-optimization-app-deployed.conf
+          echo "✅ Created nginx config with IP: ${{ secrets.EC2_HOST }}"
+        else
+          echo "⚠️  nginx-optimization-app.conf not found, skipping nginx config creation"
+        fi
+    
     - name: Prepare deployment archive
       run: |
         # Create file list excluding unwanted files/directories
@@ -44,6 +54,11 @@ jobs:
           ! -name '.env' \
           ! -name 'deployment.tar.gz' \
           > /tmp/files_to_archive.txt
+        
+        # Add the nginx config file if it exists
+        if [ -f "nginx-optimization-app-deployed.conf" ]; then
+          echo "nginx-optimization-app-deployed.conf" >> /tmp/files_to_archive.txt
+        fi
         
         # Create tar archive from file list
         tar -czf deployment.tar.gz -T /tmp/files_to_archive.txt
@@ -253,7 +268,6 @@ jobs:
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         port: 22
         command_timeout: 60s
-        envs: EC2_HOST_IP=${{ secrets.EC2_HOST }}
         script: |
           cd /home/ec2-user/Optimization || exit 1
           source .venv/bin/activate || exit 1
@@ -289,27 +303,47 @@ jobs:
           
           # Configure and restart Nginx with IP from secrets
           echo "🌐 Configuring Nginx..."
-          if [ -f "nginx-optimization-app.conf" ]; then
-            # Use EC2_HOST_IP from GitHub secrets (passed via envs)
-            EC2_IP="${EC2_HOST_IP:-_}"
-            echo "Using IP from secrets: $EC2_IP"
-            
-            # Create nginx config with the IP from secrets
+          # Use the pre-configured nginx file with IP from secrets, or fallback to template
+          if [ -f "nginx-optimization-app-deployed.conf" ]; then
+            sudo cp nginx-optimization-app-deployed.conf /etc/nginx/conf.d/optimization-app.conf
+            EC2_IP=$(grep "server_name" /etc/nginx/conf.d/optimization-app.conf | sed 's/.*server_name \([^;]*\);.*/\1/')
+            echo "Using pre-configured nginx with IP: $EC2_IP"
+          elif [ -f "nginx-optimization-app.conf" ]; then
+            # Fallback: try to get IP from EC2 instance
+            EC2_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || hostname -I | awk '{print $1}' || echo "_")
             sudo cp nginx-optimization-app.conf /etc/nginx/conf.d/optimization-app.conf
-            # Update server_name with IP from secrets
             sudo sed -i "s/server_name _;/server_name $EC2_IP;/" /etc/nginx/conf.d/optimization-app.conf || \
             sudo sed -i "s/server_name.*;/server_name $EC2_IP;/" /etc/nginx/conf.d/optimization-app.conf || true
-            
-            sudo nginx -t && {
-              sudo systemctl restart nginx
-              sudo systemctl enable nginx
-              echo "✅ Nginx configured and restarted with IP: $EC2_IP"
-            } || {
-              echo "⚠️  Nginx configuration test failed"
-              sudo nginx -t
-            }
+            echo "Using auto-detected IP: $EC2_IP"
           else
-            echo "⚠️  nginx-optimization-app.conf not found"
+            echo "⚠️  nginx config file not found"
+            exit 1
+          fi
+          
+          # Test and restart nginx
+          sudo nginx -t && {
+            sudo systemctl restart nginx || sudo systemctl start nginx
+            sudo systemctl enable nginx
+            echo "✅ Nginx configured and restarted"
+          } || {
+            echo "❌ Nginx configuration test failed"
+            sudo nginx -t
+            exit 1
+          }
+          
+          # Verify nginx is running
+          if sudo systemctl is-active --quiet nginx; then
+            echo "✅ Nginx is running"
+          else
+            echo "⚠️  Nginx is not running, attempting to start..."
+            sudo systemctl start nginx
+            sleep 2
+            if sudo systemctl is-active --quiet nginx; then
+              echo "✅ Nginx started successfully"
+            else
+              echo "❌ Failed to start nginx"
+              sudo systemctl status nginx --no-pager -l | head -10
+            fi
           fi
           
           # Check if services are running
@@ -320,6 +354,15 @@ jobs:
           echo "🔍 Checking ports:"
           sudo netstat -tuln | grep -E "(8501|80)" || ss -tuln | grep -E "(8501|80)"
           echo ""
-          echo "🌐 Application should be accessible at:"
-          echo "   http://${EC2_IP}/"
+          echo "🌐 Application URLs:"
+          EC2_IP=$(grep "server_name" /etc/nginx/conf.d/optimization-app.conf 2>/dev/null | sed 's/.*server_name \([^;]*\);.*/\1/' || echo "IP_NOT_FOUND")
+          PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || echo "UNKNOWN")
+          echo "   Nginx config IP: $EC2_IP"
+          echo "   Public IP: $PUBLIC_IP"
+          echo "   Access at: http://${EC2_IP}/ or http://${PUBLIC_IP}/"
+          echo ""
+          echo "⚠️  If connection fails, check:"
+          echo "   1. EC2 Security Group allows inbound traffic on port 80 (HTTP)"
+          echo "   2. Nginx is running: sudo systemctl status nginx"
+          echo "   3. Streamlit is running: sudo systemctl status streamlit-optimization.service"
 
