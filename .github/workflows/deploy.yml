@@ -394,4 +394,68 @@ jobs:
           echo "   1. EC2 Security Group allows inbound traffic on port 80 (HTTP)"
           echo "   2. Nginx is running: sudo systemctl status nginx"
           echo "   3. Streamlit is running: sudo systemctl status streamlit-optimization.service"
+          
+          # Test database connection
+          echo ""
+          echo "🔍 Testing database connection..."
+          if [ -f ".env" ]; then
+            set -a
+            source .env
+            set +a
+            if [ -n "$DB_HOST" ] && [ -n "$DB_USER" ] && [ -n "$DB_PASSWORD" ]; then
+              echo "Database host: $DB_HOST"
+              echo "Database user: $DB_USER"
+              echo "Database name: ${DB_NAME:-postgres}"
+              echo "Database port: ${DB_PORT:-5432}"
+              
+              # Install PostgreSQL client if not available
+              if ! command -v psql &> /dev/null; then
+                echo "📦 Installing PostgreSQL client..."
+                if command -v yum &> /dev/null; then
+                  sudo yum install -y postgresql15 || sudo yum install -y postgresql || echo "⚠️  Could not install psql"
+                elif command -v apt-get &> /dev/null; then
+                  sudo apt-get update && sudo apt-get install -y postgresql-client || echo "⚠️  Could not install psql"
+                fi
+              fi
+              
+              # Test PostgreSQL connection
+              if command -v psql &> /dev/null; then
+                export PGPASSWORD="$DB_PASSWORD"
+                EC2_IP=$(hostname -I | awk '{print $1}' || echo "unknown")
+                echo "Testing connection from EC2 IP: $EC2_IP"
+                
+                if psql -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "$DB_USER" -d "${DB_NAME:-postgres}" -c "SELECT 1;" &>/dev/null 2>&1; then
+                  echo "✅ Database connection successful"
+                else
+                  echo "❌ Database connection test failed"
+                  echo ""
+                  echo "Common issues and solutions:"
+                  echo "1. RDS Security Group Configuration:"
+                  echo "   - Go to RDS Console → Your Database → Connectivity & security"
+                  echo "   - Edit the VPC security group"
+                  echo "   - Add inbound rule: PostgreSQL (port 5432) from EC2 security group or IP: $EC2_IP"
+                  echo ""
+                  echo "2. Database Credentials:"
+                  echo "   - Verify DB_USER, DB_PASSWORD, DB_NAME in GitHub secrets"
+                  echo "   - Check if username is case-sensitive (PostgreSQL usernames are case-sensitive)"
+                  echo "   - Current user: $DB_USER"
+                  echo ""
+                  echo "3. Database User Permissions:"
+                  echo "   - Ensure user '$DB_USER' has CONNECT privilege on database '${DB_NAME:-postgres}'"
+                  echo ""
+                  echo "Attempting connection test with verbose output..."
+                  psql -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "$DB_USER" -d "${DB_NAME:-postgres}" -c "SELECT 1;" 2>&1 | head -5 || true
+                fi
+                unset PGPASSWORD
+              else
+                echo "⚠️  psql not available, skipping database connection test"
+                echo "   Install PostgreSQL client to test database connectivity"
+              fi
+            else
+              echo "⚠️  Database credentials incomplete in .env file"
+              echo "   Required: DB_HOST, DB_USER, DB_PASSWORD"
+            fi
+          else
+            echo "⚠️  .env file not found, cannot test database connection"
+          fi
 
