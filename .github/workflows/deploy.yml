@@ -301,8 +301,36 @@ jobs:
             exit 1
           fi
           
-          # Configure and restart Nginx with IP from secrets
-          echo "🌐 Configuring Nginx..."
+          # Install and configure Nginx
+          echo "🌐 Installing and configuring Nginx..."
+          
+          # Check if nginx is installed
+          if ! command -v nginx &> /dev/null; then
+            echo "📦 Installing Nginx..."
+            if command -v yum &> /dev/null; then
+              sudo yum install -y nginx || {
+                echo "❌ Failed to install nginx with yum"
+                exit 1
+              }
+            elif command -v apt-get &> /dev/null; then
+              sudo apt-get update
+              sudo apt-get install -y nginx || {
+                echo "❌ Failed to install nginx with apt-get"
+                exit 1
+              }
+            else
+              echo "❌ Cannot determine package manager for nginx installation"
+              exit 1
+            fi
+            echo "✅ Nginx installed"
+          else
+            echo "✅ Nginx already installed"
+          fi
+          
+          # Ensure nginx directories exist
+          sudo mkdir -p /etc/nginx/conf.d
+          sudo mkdir -p /var/log/nginx
+          
           # Use the pre-configured nginx file with IP from secrets, or fallback to template
           if [ -f "nginx-optimization-app-deployed.conf" ]; then
             sudo cp nginx-optimization-app-deployed.conf /etc/nginx/conf.d/optimization-app.conf
@@ -343,6 +371,7 @@ jobs:
             else
               echo "❌ Failed to start nginx"
               sudo systemctl status nginx --no-pager -l | head -10
+              exit 1
             fi
           fi
           
