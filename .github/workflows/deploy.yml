@@ -77,6 +77,7 @@ jobs:
         DB_NAME=${{ secrets.DB_NAME }}
         DB_USER=${{ secrets.DB_USER }}
         DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+        DB_SSLMODE=prefer
         
         # OpenAI API Key (Optional)
         OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
@@ -423,28 +424,46 @@ jobs:
                 export PGPASSWORD="$DB_PASSWORD"
                 EC2_IP=$(hostname -I | awk '{print $1}' || echo "unknown")
                 echo "Testing connection from EC2 IP: $EC2_IP"
+                echo "Database host: $DB_HOST"
+                echo "Database user: $DB_USER"
+                echo "Database name: ${DB_NAME:-postgres}"
                 
-                if psql -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "$DB_USER" -d "${DB_NAME:-postgres}" -c "SELECT 1;" &>/dev/null 2>&1; then
+                # Try connection
+                CONNECTION_OUTPUT=$(psql -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "$DB_USER" -d "${DB_NAME:-postgres}" -c "SELECT 1;" 2>&1)
+                CONNECTION_EXIT_CODE=$?
+                
+                if [ $CONNECTION_EXIT_CODE -eq 0 ]; then
                   echo "✅ Database connection successful"
                 else
                   echo "❌ Database connection test failed"
                   echo ""
-                  echo "Common issues and solutions:"
-                  echo "1. RDS Security Group Configuration:"
-                  echo "   - Go to RDS Console → Your Database → Connectivity & security"
-                  echo "   - Edit the VPC security group"
-                  echo "   - Add inbound rule: PostgreSQL (port 5432) from EC2 security group or IP: $EC2_IP"
+                  echo "Error output:"
+                  echo "$CONNECTION_OUTPUT" | head -3
                   echo ""
-                  echo "2. Database Credentials:"
-                  echo "   - Verify DB_USER, DB_PASSWORD, DB_NAME in GitHub secrets"
-                  echo "   - Check if username is case-sensitive (PostgreSQL usernames are case-sensitive)"
-                  echo "   - Current user: $DB_USER"
+                  echo "🔧 Fix Steps:"
                   echo ""
-                  echo "3. Database User Permissions:"
-                  echo "   - Ensure user '$DB_USER' has CONNECT privilege on database '${DB_NAME:-postgres}'"
+                  echo "1. RDS Security Group (MOST IMPORTANT):"
+                  echo "   - Go to: RDS Console → Databases → optimization.c3ea24kmsrmf.ap-south-1.rds.amazonaws.com"
+                  echo "   - Click 'Connectivity & security' tab"
+                  echo "   - Under 'VPC security groups', click the security group link"
+                  echo "   - Click 'Edit inbound rules' → 'Add rule'"
+                  echo "   - Type: PostgreSQL, Port: 5432"
+                  echo "   - Source: Select 'Custom' → Choose EC2 security group 'launch-wizard-10'"
+                  echo "   - OR Source: Custom IP $EC2_IP/32"
+                  echo "   - Click 'Save rules'"
                   echo ""
-                  echo "Attempting connection test with verbose output..."
-                  psql -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "$DB_USER" -d "${DB_NAME:-postgres}" -c "SELECT 1;" 2>&1 | head -5 || true
+                  echo "2. Verify Database Credentials in GitHub Secrets:"
+                  echo "   - DB_USER: '$DB_USER' (case-sensitive! PostgreSQL usernames are case-sensitive)"
+                  echo "   - DB_PASSWORD: Verify it matches RDS master password"
+                  echo "   - DB_NAME: '${DB_NAME:-postgres}'"
+                  echo "   - DB_HOST: '$DB_HOST'"
+                  echo ""
+                  echo "3. Verify Database User Exists:"
+                  echo "   - Connect to RDS as master user"
+                  echo "   - Run: SELECT usename FROM pg_user WHERE usename = '$DB_USER';"
+                  echo "   - If user doesn't exist, create it:"
+                  echo "     CREATE USER \"$DB_USER\" WITH PASSWORD 'your_password';"
+                  echo "     GRANT CONNECT ON DATABASE ${DB_NAME:-postgres} TO \"$DB_USER\";"
                 fi
                 unset PGPASSWORD
               else

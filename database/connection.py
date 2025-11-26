@@ -44,16 +44,27 @@ def get_database_url() -> str:
         return database_url
     
     # Build from components
+    from urllib.parse import quote_plus
+    
     host = os.getenv("DB_HOST", "bellatrix-db.c3ea24kmsrmf.ap-south-1.rds.amazonaws.com")
     port = os.getenv("DB_PORT", "5432")
     db_name = os.getenv("DB_NAME", "bellatrix_db")
     user = os.getenv("DB_USER", "postgres")
     password = os.getenv("DB_PASSWORD", "")
     
-    if password:
-        return f"postgresql://{user}:{password}@{host}:{port}/{db_name}"
+    # URL-encode user and password to handle special characters
+    user_encoded = quote_plus(user)
+    password_encoded = quote_plus(password) if password else ""
+    
+    # Build connection string with SSL mode
+    sslmode = os.getenv("DB_SSLMODE", "prefer")  # prefer, require, disable, etc.
+    
+    if password_encoded:
+        url = f"postgresql://{user_encoded}:{password_encoded}@{host}:{port}/{db_name}?sslmode={sslmode}"
     else:
-        return f"postgresql://{user}@{host}:{port}/{db_name}"
+        url = f"postgresql://{user_encoded}@{host}:{port}/{db_name}?sslmode={sslmode}"
+    
+    return url
 
 
 def create_db_engine(
@@ -89,7 +100,9 @@ def create_db_engine(
         # Connection arguments
         connect_args={
             "connect_timeout": 10,
-            "application_name": "bellatrix_app"
+            "application_name": "bellatrix_app",
+            # SSL mode will be handled via connection string, but we can also set it here
+            "sslmode": os.getenv("DB_SSLMODE", "prefer")
         }
     )
     
