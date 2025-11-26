@@ -192,25 +192,29 @@ fi
 echo "  ❌ Connection failed"
 echo "  Error: $CONNECTION_OUTPUT" | head -2
 
-# Step 3: Try to create user if master credentials are available
-if [ -n "$DB_MASTER_USER" ] && [ -n "$DB_MASTER_PASSWORD" ]; then
+# Step 3: Try to create user using master credentials (DB_MASTER_USER or fallback to DB_USER)
+MASTER_USER="${DB_MASTER_USER:-$DB_USER}"
+MASTER_PASSWORD="${DB_MASTER_PASSWORD:-$DB_PASSWORD}"
+
+if [ -n "$MASTER_USER" ] && [ -n "$MASTER_PASSWORD" ]; then
     echo ""
-    echo "🔧 Step 3: Attempting to create database user..."
-    export PGPASSWORD="$DB_MASTER_PASSWORD"
+    echo "🔧 Step 3: Attempting to create database user (if needed)..."
+    echo "  Using master credentials: $MASTER_USER"
+    export PGPASSWORD="$MASTER_PASSWORD"
     
     # Check if user exists
-    USER_EXISTS=$(psql -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "$DB_MASTER_USER" -d "postgres" -tAc "SELECT 1 FROM pg_user WHERE usename = '$DB_USER';" 2>/dev/null || echo "0")
+    USER_EXISTS=$(psql -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "$MASTER_USER" -d "postgres" -tAc "SELECT 1 FROM pg_user WHERE usename = '$DB_USER';" 2>/dev/null || echo "0")
     
     if [ "$USER_EXISTS" != "1" ]; then
         echo "  User '$DB_USER' does not exist, creating..."
         
         # Create user
-        if psql -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "$DB_MASTER_USER" -d "postgres" -c "CREATE USER \"$DB_USER\" WITH PASSWORD '$DB_PASSWORD';" 2>/dev/null; then
+        if psql -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "$MASTER_USER" -d "postgres" -c "CREATE USER \"$DB_USER\" WITH PASSWORD '$DB_PASSWORD';" 2>/dev/null; then
             echo "  ✅ User '$DB_USER' created"
             
             # Grant permissions
-            psql -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "$DB_MASTER_USER" -d "postgres" -c "GRANT CONNECT ON DATABASE ${DB_NAME:-postgres} TO \"$DB_USER\";" 2>/dev/null || true
-            psql -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "$DB_MASTER_USER" -d "${DB_NAME:-postgres}" -c "GRANT USAGE ON SCHEMA public TO \"$DB_USER\"; GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO \"$DB_USER\";" 2>/dev/null || true
+            psql -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "$MASTER_USER" -d "postgres" -c "GRANT CONNECT ON DATABASE ${DB_NAME:-postgres} TO \"$DB_USER\";" 2>/dev/null || true
+            psql -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "$MASTER_USER" -d "${DB_NAME:-postgres}" -c "GRANT USAGE ON SCHEMA public TO \"$DB_USER\"; GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO \"$DB_USER\";" 2>/dev/null || true
             
             echo "  ✅ Permissions granted"
             
@@ -227,30 +231,24 @@ if [ -n "$DB_MASTER_USER" ] && [ -n "$DB_MASTER_PASSWORD" ]; then
                 echo "  ⚠️  User created but connection still fails"
             fi
         else
-            echo "  ❌ Failed to create user"
+            echo "  ⚠️  Failed to create user (may not have permissions or user creation not needed)"
         fi
     else
         echo "  User '$DB_USER' already exists"
-        echo "  ⚠️  Password may be incorrect or user lacks permissions"
-        echo ""
-        echo "  To fix password, connect as master user and run:"
-        echo "    ALTER USER \"$DB_USER\" WITH PASSWORD '$DB_PASSWORD';"
+        if [ "$MASTER_USER" == "$DB_USER" ]; then
+            echo "  ✅ Using same credentials for master and application user"
+        else
+            echo "  ⚠️  Password may be incorrect or user lacks permissions"
+            echo ""
+            echo "  To fix password, connect as master user and run:"
+            echo "    ALTER USER \"$DB_USER\" WITH PASSWORD '$DB_PASSWORD';"
+        fi
     fi
     unset PGPASSWORD
 else
     echo ""
-    echo "⚠️  DB_MASTER_USER and DB_MASTER_PASSWORD not set"
-    echo "   Cannot automatically create database user"
-    echo ""
-    echo "To fix manually:"
-    echo "1. Connect to RDS as master user:"
-    echo "   psql -h $DB_HOST -U postgres -d postgres"
-    echo ""
-    echo "2. Create user:"
-    echo "   CREATE USER \"$DB_USER\" WITH PASSWORD '$DB_PASSWORD';"
-    echo "   GRANT CONNECT ON DATABASE ${DB_NAME:-postgres} TO \"$DB_USER\";"
-    echo "   GRANT USAGE ON SCHEMA public TO \"$DB_USER\";"
-    echo "   GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO \"$DB_USER\";"
+    echo "⚠️  Cannot determine master credentials"
+    echo "   DB_USER and DB_PASSWORD must be set"
 fi
 
 unset PGPASSWORD

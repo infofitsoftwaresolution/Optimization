@@ -625,29 +625,33 @@ jobs:
                   echo "$CONNECTION_OUTPUT" | head -3
                   echo ""
                   
-                  # Try to automatically create user if master credentials are available
-                  if [ -n "$DB_MASTER_USER" ] && [ -n "$DB_MASTER_PASSWORD" ]; then
-                    echo "🔧 Attempting to automatically create database user..."
-                    export PGPASSWORD="$DB_MASTER_PASSWORD"
+                  # Try to automatically create user using master credentials (DB_MASTER_USER or fallback to DB_USER)
+                  MASTER_USER="${DB_MASTER_USER:-$DB_USER}"
+                  MASTER_PASSWORD="${DB_MASTER_PASSWORD:-$DB_PASSWORD}"
+                  
+                  if [ -n "$MASTER_USER" ] && [ -n "$MASTER_PASSWORD" ]; then
+                    echo "🔧 Attempting to automatically create database user (if needed)..."
+                    echo "   Using master credentials: $MASTER_USER"
+                    export PGPASSWORD="$MASTER_PASSWORD"
                     
                     # Check if user exists
-                    USER_EXISTS=$(psql -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "$DB_MASTER_USER" -d "postgres" -tAc "SELECT 1 FROM pg_user WHERE usename = '$DB_USER';" 2>/dev/null || echo "0")
+                    USER_EXISTS=$(psql -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "$MASTER_USER" -d "postgres" -tAc "SELECT 1 FROM pg_user WHERE usename = '$DB_USER';" 2>/dev/null || echo "0")
                     
                     if [ "$USER_EXISTS" != "1" ]; then
                       echo "User '$DB_USER' does not exist, creating..."
                       
                       # Create user with password
                       CREATE_USER_SQL="CREATE USER \"$DB_USER\" WITH PASSWORD '$DB_PASSWORD';"
-                      if psql -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "$DB_MASTER_USER" -d "postgres" -c "$CREATE_USER_SQL" 2>/dev/null; then
+                      if psql -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "$MASTER_USER" -d "postgres" -c "$CREATE_USER_SQL" 2>/dev/null; then
                         echo "✅ User '$DB_USER' created successfully"
                         
                         # Grant permissions
                         GRANT_SQL="GRANT CONNECT ON DATABASE ${DB_NAME:-postgres} TO \"$DB_USER\";"
-                        psql -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "$DB_MASTER_USER" -d "postgres" -c "$GRANT_SQL" 2>/dev/null || true
+                        psql -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "$MASTER_USER" -d "postgres" -c "$GRANT_SQL" 2>/dev/null || true
                         
                         # Grant schema usage
                         GRANT_SCHEMA_SQL="GRANT USAGE ON SCHEMA public TO \"$DB_USER\"; GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO \"$DB_USER\";"
-                        psql -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "$DB_MASTER_USER" -d "${DB_NAME:-postgres}" -c "$GRANT_SCHEMA_SQL" 2>/dev/null || true
+                        psql -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "$MASTER_USER" -d "${DB_NAME:-postgres}" -c "$GRANT_SCHEMA_SQL" 2>/dev/null || true
                         
                         echo "✅ Permissions granted to user '$DB_USER'"
                         
@@ -660,33 +664,23 @@ jobs:
                           echo "⚠️  User created but connection still fails - check password"
                         fi
                       else
-                        echo "⚠️  Failed to create user automatically"
+                        echo "⚠️  Failed to create user automatically (may not have permissions)"
+                        if [ "$MASTER_USER" == "$DB_USER" ]; then
+                          echo "   Note: Using same credentials for master and application user"
+                        fi
                       fi
                     else
                       echo "User '$DB_USER' already exists"
-                      echo "⚠️  Connection failed - password may be incorrect"
+                      if [ "$MASTER_USER" == "$DB_USER" ]; then
+                        echo "✅ Using same credentials for master and application user"
+                      else
+                        echo "⚠️  Connection failed - password may be incorrect"
+                      fi
                     fi
                     unset PGPASSWORD
                   else
-                    echo "⚠️  DB_MASTER_USER and DB_MASTER_PASSWORD not set in secrets"
-                    echo "   Cannot automatically create database user"
-                    echo ""
-                    echo "🔧 Manual Fix Steps:"
-                    echo ""
-                    echo "1. RDS Security Group (should be auto-configured above):"
-                    echo "   - Check if security group rule was added automatically"
-                    echo "   - If not, add manually: PostgreSQL (5432) from EC2 security group"
-                    echo ""
-                    echo "2. Database User:"
-                    echo "   - Connect to RDS as master user"
-                    echo "   - Run: SELECT usename FROM pg_user WHERE usename = '$DB_USER';"
-                    echo "   - If user doesn't exist, create it:"
-                    echo "     CREATE USER \"$DB_USER\" WITH PASSWORD '$DB_PASSWORD';"
-                    echo "     GRANT CONNECT ON DATABASE ${DB_NAME:-postgres} TO \"$DB_USER\";"
-                    echo ""
-                    echo "3. Verify Credentials:"
-                    echo "   - DB_USER: '$DB_USER' (case-sensitive!)"
-                    echo "   - DB_PASSWORD: Must match the password set for user '$DB_USER'"
+                    echo "⚠️  Cannot determine master credentials"
+                    echo "   DB_USER and DB_PASSWORD must be set"
                   fi
                 fi
                 unset PGPASSWORD
