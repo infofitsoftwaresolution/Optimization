@@ -23,9 +23,9 @@ if [ -z "$DB_HOST" ] || [ -z "$DB_USER" ] || [ -z "$DB_PASSWORD" ]; then
     exit 1
 fi
 
-# Fix DB_NAME if it's incorrectly set to the username
-if [ "$DB_NAME" == "$DB_USER" ] || [ -z "$DB_NAME" ]; then
-    echo "⚠️  DB_NAME is set to '$DB_NAME' (same as username or empty)"
+# Fix DB_NAME if it's incorrectly set to the username or empty
+if [ "$DB_NAME" == "$DB_USER" ] || [ -z "$DB_NAME" ] || [ "$DB_NAME" == "None" ]; then
+    echo "⚠️  DB_NAME is set to '$DB_NAME' (same as username, empty, or invalid)"
     echo "   Fixing to 'postgres'..."
     DB_NAME="postgres"
     # Update .env file
@@ -34,6 +34,21 @@ if [ "$DB_NAME" == "$DB_USER" ] || [ -z "$DB_NAME" ]; then
         sed -i '/^DB_NAME=/d' /home/ec2-user/Optimization/.env
         echo "DB_NAME=postgres" >> /home/ec2-user/Optimization/.env
         echo "✅ Updated .env file with correct DB_NAME=postgres"
+        # Reload environment
+        export DB_NAME="postgres"
+    fi
+fi
+
+# Also check if DB_NAME contains the username (case-insensitive)
+if echo "$DB_NAME" | grep -qi "$DB_USER"; then
+    if [ "$DB_NAME" != "postgres" ]; then
+        echo "⚠️  DB_NAME '$DB_NAME' appears to contain username, fixing to 'postgres'..."
+        DB_NAME="postgres"
+        if [ -f "/home/ec2-user/Optimization/.env" ]; then
+            sed -i '/^DB_NAME=/d' /home/ec2-user/Optimization/.env
+            echo "DB_NAME=postgres" >> /home/ec2-user/Optimization/.env
+            export DB_NAME="postgres"
+        fi
     fi
 fi
 

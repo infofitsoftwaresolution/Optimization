@@ -171,14 +171,32 @@ jobs:
         echo "EC2 Host: $EC2_HOST"
         echo "AWS Region: $AWS_REGION"
         
-        # Get RDS instance identifier
+        # Get RDS instance identifier - try multiple query methods
         RDS_ID=$(aws rds describe-db-instances \
           --region "$AWS_REGION" \
           --query "DBInstances[?Endpoint.Address=='$DB_HOST'].DBInstanceIdentifier" \
           --output text 2>/dev/null || echo "")
         
-        if [ -z "$RDS_ID" ]; then
+        # If not found, try searching by endpoint without exact match
+        if [ -z "$RDS_ID" ] || [ "$RDS_ID" == "None" ]; then
+          echo "Trying alternative method to find RDS instance..."
+          # Extract instance identifier from endpoint (format: instance-id.region.rds.amazonaws.com)
+          RDS_ID=$(echo "$DB_HOST" | cut -d'.' -f1)
+          echo "Extracted potential RDS ID from endpoint: $RDS_ID"
+          
+          # Verify it exists
+          if ! aws rds describe-db-instances \
+            --region "$AWS_REGION" \
+            --db-instance-identifier "$RDS_ID" \
+            --query 'DBInstances[0].DBInstanceIdentifier' \
+            --output text 2>/dev/null | grep -q "$RDS_ID"; then
+            RDS_ID=""
+          fi
+        fi
+        
+        if [ -z "$RDS_ID" ] || [ "$RDS_ID" == "None" ]; then
           echo "⚠️  Could not find RDS instance for endpoint: $DB_HOST"
+          echo "   This is not critical - security group can be configured manually"
           echo "   Skipping automatic security group configuration"
           exit 0
         fi
@@ -577,15 +595,21 @@ jobs:
             source .env
             set +a
             
-            # Fix DB_NAME if it's incorrectly set to username or empty
-            if [ "$DB_NAME" == "$DB_USER" ] || [ -z "$DB_NAME" ]; then
-              echo "⚠️  DB_NAME is '$DB_NAME' (same as username or empty), fixing to 'postgres'..."
-              DB_NAME="postgres"
-              # Update .env file
-              sed -i '/^DB_NAME=/d' .env
-              echo "DB_NAME=postgres" >> .env
-              echo "✅ Updated .env with DB_NAME=postgres"
-            fi
+          # Fix DB_NAME if it's incorrectly set to username or empty
+          # Check if DB_NAME matches DB_USER (case-insensitive) or is empty
+          DB_NAME_UPPER=$(echo "$DB_NAME" | tr '[:lower:]' '[:upper:]')
+          DB_USER_UPPER=$(echo "$DB_USER" | tr '[:lower:]' '[:upper:]')
+          
+          if [ "$DB_NAME" == "$DB_USER" ] || [ "$DB_NAME_UPPER" == "$DB_USER_UPPER" ] || [ -z "$DB_NAME" ] || [ "$DB_NAME" == "None" ]; then
+            echo "⚠️  DB_NAME is '$DB_NAME' (same as username or empty), fixing to 'postgres'..."
+            DB_NAME="postgres"
+            # Update .env file
+            sed -i '/^DB_NAME=/d' .env
+            echo "DB_NAME=postgres" >> .env
+            echo "✅ Updated .env with DB_NAME=postgres"
+            # Export for current session
+            export DB_NAME="postgres"
+          fi
             
             if [ -n "$DB_HOST" ] && [ -n "$DB_USER" ] && [ -n "$DB_PASSWORD" ]; then
               echo "Database host: $DB_HOST"
