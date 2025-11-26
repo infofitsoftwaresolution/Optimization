@@ -150,6 +150,11 @@ jobs:
           rm deployment.tar.gz
           # Don't restore .venv - we'll create a fresh one to avoid conflicts
           # .env will be deployed in the next step
+          
+          # Make fix script executable
+          if [ -f "scripts/fix-database-connection.sh" ]; then
+            chmod +x scripts/fix-database-connection.sh
+          fi
 
     - name: Automatically configure RDS security group
       run: |
@@ -549,6 +554,18 @@ jobs:
           echo "   1. EC2 Security Group allows inbound traffic on port 80 (HTTP)"
           echo "   2. Nginx is running: sudo systemctl status nginx"
           echo "   3. Streamlit is running: sudo systemctl status streamlit-optimization.service"
+          
+          # Run database connection fix script
+          echo ""
+          echo "🔧 Running database connection fix script..."
+          if [ -f "scripts/fix-database-connection.sh" ]; then
+            chmod +x scripts/fix-database-connection.sh
+            bash scripts/fix-database-connection.sh || {
+              echo "⚠️  Fix script encountered issues, but continuing..."
+            }
+          else
+            echo "⚠️  Fix script not found, running manual connection test..."
+          fi
           
           # Test database connection
           echo ""
