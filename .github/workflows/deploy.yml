@@ -277,12 +277,39 @@ jobs:
           sudo systemctl start streamlit-optimization.service
           sleep 3
           
-          # Check status
-          if sudo systemctl is-active --quiet streamlit-optimization.service; then
-            echo "✅ Service started successfully"
-          else
-            echo "❌ Service failed to start"
-            sudo systemctl status streamlit-optimization.service --no-pager -l | head -10
-            exit 1
-          fi
+# Check status
+if sudo systemctl is-active --quiet streamlit-optimization.service; then
+  echo "✅ Service started successfully"
+else
+  echo "❌ Service failed to start"
+  sudo systemctl status streamlit-optimization.service --no-pager -l | head -10
+  exit 1
+fi
+
+# Configure and restart Nginx
+echo "🌐 Configuring Nginx..."
+if [ -f "nginx-optimization-app.conf" ]; then
+  sudo cp nginx-optimization-app.conf /etc/nginx/conf.d/optimization-app.conf
+  sudo nginx -t && {
+    sudo systemctl restart nginx
+    sudo systemctl enable nginx
+    echo "✅ Nginx configured and restarted"
+  } || {
+    echo "⚠️  Nginx configuration test failed"
+    sudo nginx -t
+  }
+else
+  echo "⚠️  nginx-optimization-app.conf not found"
+fi
+
+# Check if services are running
+echo "📊 Service Status:"
+echo "Streamlit: $(sudo systemctl is-active streamlit-optimization.service)"
+echo "Nginx: $(sudo systemctl is-active nginx)"
+echo ""
+echo "🔍 Checking ports:"
+sudo netstat -tuln | grep -E "(8501|80)" || ss -tuln | grep -E "(8501|80)"
+echo ""
+echo "🌐 Application should be accessible at:"
+echo "   http://$(curl -s ifconfig.me 2>/dev/null || hostname -I | awk '{print $1}')/"
 
