@@ -575,6 +575,35 @@ jobs:
           echo "   2. Nginx is running: sudo systemctl status nginx"
           echo "   3. Streamlit is running: sudo systemctl status streamlit-optimization.service"
           
+          # Fix DB_NAME FIRST before running any database operations
+          echo ""
+          echo "🔧 Fixing database name configuration..."
+          if [ -f ".env" ]; then
+            set -a
+            source .env
+            set +a
+            
+            # Fix DB_NAME if it's incorrectly set to username or empty
+            # Check if DB_NAME matches DB_USER (case-insensitive) or is empty
+            DB_NAME_UPPER=$(echo "$DB_NAME" | tr '[:lower:]' '[:upper:]')
+            DB_USER_UPPER=$(echo "$DB_USER" | tr '[:lower:]' '[:upper:]')
+            
+            if [ "$DB_NAME" == "$DB_USER" ] || [ "$DB_NAME_UPPER" == "$DB_USER_UPPER" ] || [ -z "$DB_NAME" ] || [ "$DB_NAME" == "None" ]; then
+              echo "⚠️  DB_NAME is '$DB_NAME' (same as username or empty), fixing to 'postgres'..."
+              DB_NAME="postgres"
+              # Update .env file
+              sed -i '/^DB_NAME=/d' .env
+              echo "DB_NAME=postgres" >> .env
+              echo "✅ Updated .env with DB_NAME=postgres"
+            fi
+            
+            # Reload .env after fix
+            set -a
+            source .env
+            set +a
+            export DB_NAME="${DB_NAME:-postgres}"
+          fi
+          
           # Run database connection fix script
           echo ""
           echo "🔧 Running database connection fix script..."
@@ -583,6 +612,13 @@ jobs:
             bash scripts/fix-database-connection.sh || {
               echo "⚠️  Fix script encountered issues, but continuing..."
             }
+            # Reload .env after fix script (it may have updated it)
+            if [ -f ".env" ]; then
+              set -a
+              source .env
+              set +a
+              export DB_NAME="${DB_NAME:-postgres}"
+            fi
           else
             echo "⚠️  Fix script not found, running manual connection test..."
           fi
@@ -594,28 +630,30 @@ jobs:
             set -a
             source .env
             set +a
-            
-          # Fix DB_NAME if it's incorrectly set to username or empty
-          # Check if DB_NAME matches DB_USER (case-insensitive) or is empty
-          DB_NAME_UPPER=$(echo "$DB_NAME" | tr '[:lower:]' '[:upper:]')
-          DB_USER_UPPER=$(echo "$DB_USER" | tr '[:lower:]' '[:upper:]')
-          
-          if [ "$DB_NAME" == "$DB_USER" ] || [ "$DB_NAME_UPPER" == "$DB_USER_UPPER" ] || [ -z "$DB_NAME" ] || [ "$DB_NAME" == "None" ]; then
-            echo "⚠️  DB_NAME is '$DB_NAME' (same as username or empty), fixing to 'postgres'..."
-            DB_NAME="postgres"
-            # Update .env file
-            sed -i '/^DB_NAME=/d' .env
-            echo "DB_NAME=postgres" >> .env
-            echo "✅ Updated .env with DB_NAME=postgres"
-            # Export for current session
-            export DB_NAME="postgres"
-          fi
+            # Ensure DB_NAME is set correctly
+            export DB_NAME="${DB_NAME:-postgres}"
             
             if [ -n "$DB_HOST" ] && [ -n "$DB_USER" ] && [ -n "$DB_PASSWORD" ]; then
+              # Ensure DB_NAME is correct one more time before connection
+              if [ "$DB_NAME" == "$DB_USER" ] || [ -z "$DB_NAME" ] || [ "$DB_NAME" == "None" ]; then
+                DB_NAME="postgres"
+                export DB_NAME="postgres"
+              fi
+              
               echo "Database host: $DB_HOST"
               echo "Database user: $DB_USER"
               echo "Database name: ${DB_NAME:-postgres}"
               echo "Database port: ${DB_PORT:-5432}"
+              
+              # Verify DB_NAME is not the username
+              if [ "$DB_NAME" == "$DB_USER" ]; then
+                echo "❌ ERROR: DB_NAME is still set to username '$DB_USER'"
+                echo "   Forcing DB_NAME to 'postgres'..."
+                DB_NAME="postgres"
+                export DB_NAME="postgres"
+                sed -i '/^DB_NAME=/d' .env
+                echo "DB_NAME=postgres" >> .env
+              fi
               
               # Install PostgreSQL client if not available
               if ! command -v psql &> /dev/null; then
