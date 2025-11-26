@@ -88,6 +88,8 @@ jobs:
         # Optional: Master credentials for automatic user creation (if DB_USER doesn't exist)
         DB_MASTER_USER=${{ secrets.DB_MASTER_USER }}
         DB_MASTER_PASSWORD=${{ secrets.DB_MASTER_PASSWORD }}
+        # Ensure DB_NAME is not empty or same as DB_USER (fallback to postgres)
+        # This will be validated and fixed by the fix script on EC2
         
         # OpenAI API Key (Optional)
         OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
@@ -574,6 +576,17 @@ jobs:
             set -a
             source .env
             set +a
+            
+            # Fix DB_NAME if it's incorrectly set to username or empty
+            if [ "$DB_NAME" == "$DB_USER" ] || [ -z "$DB_NAME" ]; then
+              echo "⚠️  DB_NAME is '$DB_NAME' (same as username or empty), fixing to 'postgres'..."
+              DB_NAME="postgres"
+              # Update .env file
+              sed -i '/^DB_NAME=/d' .env
+              echo "DB_NAME=postgres" >> .env
+              echo "✅ Updated .env with DB_NAME=postgres"
+            fi
+            
             if [ -n "$DB_HOST" ] && [ -n "$DB_USER" ] && [ -n "$DB_PASSWORD" ]; then
               echo "Database host: $DB_HOST"
               echo "Database user: $DB_USER"

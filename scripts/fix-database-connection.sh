@@ -23,11 +23,37 @@ if [ -z "$DB_HOST" ] || [ -z "$DB_USER" ] || [ -z "$DB_PASSWORD" ]; then
     exit 1
 fi
 
+# Fix DB_NAME if it's incorrectly set to the username
+if [ "$DB_NAME" == "$DB_USER" ] || [ -z "$DB_NAME" ]; then
+    echo "⚠️  DB_NAME is set to '$DB_NAME' (same as username or empty)"
+    echo "   Fixing to 'postgres'..."
+    DB_NAME="postgres"
+    # Update .env file
+    if [ -f "/home/ec2-user/Optimization/.env" ]; then
+        # Remove old DB_NAME line and add correct one
+        sed -i '/^DB_NAME=/d' /home/ec2-user/Optimization/.env
+        echo "DB_NAME=postgres" >> /home/ec2-user/Optimization/.env
+        echo "✅ Updated .env file with correct DB_NAME=postgres"
+    fi
+fi
+
+# Check if DATABASE_URL is set and might be overriding
+if [ -n "$DATABASE_URL" ]; then
+    echo "⚠️  DATABASE_URL is set, checking if it uses correct database name..."
+    if echo "$DATABASE_URL" | grep -q "/$DB_USER[/?]"; then
+        echo "   DATABASE_URL appears to use username as database name"
+        echo "   This will override DB_NAME. Consider removing DATABASE_URL or fixing it."
+    fi
+fi
+
 echo "Database Configuration:"
 echo "  Host: $DB_HOST"
 echo "  User: $DB_USER"
 echo "  Database: ${DB_NAME:-postgres}"
 echo "  Port: ${DB_PORT:-5432}"
+if [ -n "$DATABASE_URL" ]; then
+    echo "  DATABASE_URL: ***SET*** (may override above)"
+fi
 echo ""
 
 # Get EC2 instance metadata
