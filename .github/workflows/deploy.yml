@@ -47,6 +47,25 @@ jobs:
         STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
         EOF
     
+    - name: Deploy code to EC2
+      uses: appleboy/scp-action@master
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        source: "."
+        target: "/home/ec2-user/"
+        strip_components: 0
+        rm: false
+        exclude: |
+          .git
+          .github
+          __pycache__
+          *.pyc
+          .venv
+          node_modules
+          .env.example
+
     - name: Deploy .env file to EC2
       uses: appleboy/scp-action@master
       with:
@@ -64,29 +83,39 @@ jobs:
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         script: |
-          # Ensure git is installed
+          # Optionally install git (not required since code is deployed via SCP)
           if ! command -v git &> /dev/null; then
-            echo "📦 Installing git..."
+            echo "📦 Installing git (optional, for future git operations)..."
             if command -v yum &> /dev/null; then
-              sudo yum install -y git
+              sudo yum install -y git || echo "⚠️  Git installation failed (non-critical)"
             elif command -v apt-get &> /dev/null; then
-              sudo apt-get update && sudo apt-get install -y git
+              sudo apt-get update && sudo apt-get install -y git || echo "⚠️  Git installation failed (non-critical)"
             else
-              echo "❌ Cannot determine package manager. Please install git manually."
-              exit 1
+              echo "⚠️  Cannot determine package manager. Git not installed (non-critical)"
             fi
           fi
           
-          chmod 600 /home/ec2-user/Optimization/.env
+          # Ensure project directory exists
+          if [ ! -d "/home/ec2-user/Optimization" ]; then
+            echo "📁 Creating project directory..."
+            mkdir -p /home/ec2-user/Optimization
+          fi
+          
           cd /home/ec2-user/Optimization || { echo "❌ Failed to cd to project directory"; exit 1; }
           
-          # Pull latest code
-          echo "📥 Pulling latest code..."
-          git pull origin main || {
-            echo "⚠️  Git pull failed, trying to fetch and reset..."
-            git fetch origin || { echo "❌ Git fetch failed"; exit 1; }
-            git reset --hard origin/main || { echo "❌ Git reset failed"; exit 1; }
-          }
+          # Set permissions on .env file
+          chmod 600 /home/ec2-user/Optimization/.env || echo "⚠️  .env file not found, will be created later"
+          
+          # Code is already deployed via SCP, so we just verify it's there
+          echo "✅ Code deployed via SCP"
+          
+          # Optionally try to update via git if it's a git repository (non-blocking)
+          if [ -d ".git" ] && command -v git &> /dev/null; then
+            echo "📥 Attempting to sync with git repository (optional)..."
+            git pull origin main 2>/dev/null || {
+              echo "⚠️  Git pull failed (non-critical - code already deployed via SCP)"
+            }
+          fi
           
           # Ensure virtual environment exists
           if [ ! -d ".venv" ]; then
@@ -151,3 +180,4 @@ jobs:
           
           # Show service status
           sudo systemctl status streamlit-optimization.service --no-pager -l | head -20
+
