@@ -83,11 +83,7 @@ jobs:
           if [ -f ".env" ]; then
             cp .env /tmp/optimization_env_backup
           fi
-          # Backup .venv if it exists
-          if [ -d ".venv" ]; then
-            mv .venv /tmp/optimization_venv_backup
-          fi
-          # Remove old files (we'll restore .env and .venv after extraction)
+          # Remove old files (we'll create fresh .venv after extraction)
           find . -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 
     - name: Copy deployment archive to EC2
@@ -110,13 +106,8 @@ jobs:
           cd /home/ec2-user/Optimization
           tar -xzf deployment.tar.gz
           rm deployment.tar.gz
-          # Restore .venv backup if it existed (saves time on dependency installation)
-          if [ -d "/tmp/optimization_venv_backup" ]; then
-            rm -rf .venv
-            mv /tmp/optimization_venv_backup .venv
-            echo "✅ Restored existing virtual environment"
-          fi
-          # .env will be deployed in the next step, so we don't restore the old one
+          # Don't restore .venv - we'll create a fresh one to avoid conflicts
+          # .env will be deployed in the next step
 
     - name: Deploy .env file to EC2
       uses: appleboy/scp-action@master
@@ -128,12 +119,32 @@ jobs:
         target: "/home/ec2-user/Optimization/"
         strip_components: 0
 
+    - name: Clear virtual environment and prepare for fresh install
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        command_timeout: 30s
+        script: |
+          cd /home/ec2-user/Optimization || exit 1
+          echo "🧹 Clearing virtual environment for fresh install..."
+          # Remove old virtual environment to avoid conflicts
+          if [ -d ".venv" ]; then
+            rm -rf .venv
+            echo "✅ Removed old virtual environment"
+          fi
+          # Clear pip cache to free up space
+          pip3 cache purge 2>/dev/null || true
+          echo "✅ Cleared pip cache"
+
     - name: Set permissions, update service, and restart
       uses: appleboy/ssh-action@master
       with:
         host: ${{ secrets.EC2_HOST }}
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
+        command_timeout: 600s
         script: |
           # Optionally install git (not required since code is deployed via SCP)
           if ! command -v git &> /dev/null; then
@@ -188,26 +199,40 @@ jobs:
             }
           fi
           
-          # Ensure virtual environment exists
-          if [ ! -d ".venv" ]; then
-            echo "🐍 Creating virtual environment..."
-            python3 -m venv .venv || python3.10 -m venv .venv || python3.9 -m venv .venv
-          fi
+          # Clear and recreate virtual environment for clean install
+          echo "🧹 Clearing old virtual environment..."
+          rm -rf .venv
+          
+          # Create fresh virtual environment
+          echo "🐍 Creating fresh virtual environment..."
+          python3 -m venv .venv || python3.10 -m venv .venv || python3.9 -m venv .venv || { echo "❌ Failed to create virtual environment"; exit 1; }
           
           # Activate virtual environment
           echo "🔌 Activating virtual environment..."
           source .venv/bin/activate || { echo "❌ Failed to activate virtual environment"; exit 1; }
           
-          # Upgrade pip and install/update dependencies (minimal set for faster deployment)
-          echo "📦 Installing/updating dependencies (minimal set)..."
-          pip install --upgrade pip
+          # Upgrade pip with timeout
+          echo "📦 Upgrading pip..."
+          timeout 60 pip install --upgrade pip --no-cache-dir || { echo "⚠️  Pip upgrade timed out or failed, continuing..."; }
+          
+          # Install dependencies with timeout and progress
+          echo "📦 Installing dependencies (minimal set, this may take a few minutes)..."
           # Use minimal requirements to avoid heavy ML libraries (torch, etc.)
           if [ -f "requirements-minimal.txt" ]; then
-            pip install -r requirements-minimal.txt
+            echo "Using requirements-minimal.txt"
+            timeout 600 pip install --no-cache-dir -r requirements-minimal.txt || {
+              echo "❌ Dependency installation failed or timed out"
+              echo "Attempting to continue with existing packages..."
+            }
           else
-            # Fallback to full requirements if minimal doesn't exist
-            pip install -r requirements.txt
+            echo "⚠️  requirements-minimal.txt not found, using requirements.txt"
+            timeout 600 pip install --no-cache-dir -r requirements.txt || {
+              echo "❌ Dependency installation failed or timed out"
+              exit 1
+            }
           fi
+          
+          echo "✅ Dependencies installed successfully"
           
           # Verify we're in the right directory and file exists
           if [ ! -f "src/dashboard.py" ]; then
