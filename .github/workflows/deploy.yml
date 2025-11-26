@@ -20,10 +20,15 @@ jobs:
       with:
         python-version: '3.10'
     
-    - name: Install dependencies
+    - name: Install dependencies (minimal for CI)
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        # Use minimal requirements in CI to speed up workflow
+        if [ -f "requirements-minimal.txt" ]; then
+          pip install -r requirements-minimal.txt
+        else
+          pip install -r requirements.txt
+        fi
     
     - name: Prepare deployment archive
       run: |
@@ -193,10 +198,16 @@ jobs:
           echo "🔌 Activating virtual environment..."
           source .venv/bin/activate || { echo "❌ Failed to activate virtual environment"; exit 1; }
           
-          # Upgrade pip and install/update dependencies
-          echo "📦 Installing/updating dependencies..."
+          # Upgrade pip and install/update dependencies (minimal set for faster deployment)
+          echo "📦 Installing/updating dependencies (minimal set)..."
           pip install --upgrade pip
-          pip install -r requirements.txt
+          # Use minimal requirements to avoid heavy ML libraries (torch, etc.)
+          if [ -f "requirements-minimal.txt" ]; then
+            pip install -r requirements-minimal.txt
+          else
+            # Fallback to full requirements if minimal doesn't exist
+            pip install -r requirements.txt
+          fi
           
           # Verify we're in the right directory and file exists
           if [ ! -f "src/dashboard.py" ]; then
