@@ -64,13 +64,56 @@ jobs:
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         script: |
+          # Ensure git is installed
+          if ! command -v git &> /dev/null; then
+            echo "📦 Installing git..."
+            if command -v yum &> /dev/null; then
+              sudo yum install -y git
+            elif command -v apt-get &> /dev/null; then
+              sudo apt-get update && sudo apt-get install -y git
+            else
+              echo "❌ Cannot determine package manager. Please install git manually."
+              exit 1
+            fi
+          fi
+          
           chmod 600 /home/ec2-user/Optimization/.env
-          cd /home/ec2-user/Optimization
-          git pull origin main || true
+          cd /home/ec2-user/Optimization || { echo "❌ Failed to cd to project directory"; exit 1; }
+          
+          # Pull latest code
+          echo "📥 Pulling latest code..."
+          git pull origin main || {
+            echo "⚠️  Git pull failed, trying to fetch and reset..."
+            git fetch origin || { echo "❌ Git fetch failed"; exit 1; }
+            git reset --hard origin/main || { echo "❌ Git reset failed"; exit 1; }
+          }
+          
+          # Ensure virtual environment exists
+          if [ ! -d ".venv" ]; then
+            echo "🐍 Creating virtual environment..."
+            python3 -m venv .venv || python3.10 -m venv .venv || python3.9 -m venv .venv
+          fi
+          
+          # Activate virtual environment
+          echo "🔌 Activating virtual environment..."
+          source .venv/bin/activate || { echo "❌ Failed to activate virtual environment"; exit 1; }
+          
+          # Upgrade pip and install/update dependencies
+          echo "📦 Installing/updating dependencies..."
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          
+          # Verify we're in the right directory and file exists
+          if [ ! -f "src/dashboard.py" ]; then
+            echo "❌ Error: src/dashboard.py not found in current directory"
+            echo "Current directory: $(pwd)"
+            echo "Directory contents:"
+            ls -la
+            exit 1
+          fi
           
           # Validate Python syntax before restarting
           echo "🔍 Validating Python syntax..."
-          source .venv/bin/activate || true
           python3 -m py_compile src/dashboard.py
           if [ $? -eq 0 ]; then
             echo "✅ Syntax validation passed"
