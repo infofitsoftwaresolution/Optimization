@@ -2247,81 +2247,81 @@ with tab1:
                                         # Use master_response from the current prompt's evaluation
                                         current_master_response = master_responses.get(current_prompt, None)
                                         if use_master and current_master_response and metrics.get("status") == "success":
-                                    candidate_response = metrics.get("response", "")
-                                    if candidate_response:
-                                        try:
-                                            # 1) Decide if this is a Note Audit prompt
-                                            is_note_audit = (
-                                                similarity_calculator.is_note_audit_response(current_master_response) and
-                                                similarity_calculator.is_note_audit_response(candidate_response)
-                                            )
+                                            candidate_response = metrics.get("response", "")
+                                            if candidate_response:
+                                                try:
+                                                    # 1) Decide if this is a Note Audit prompt
+                                                    is_note_audit = (
+                                                        similarity_calculator.is_note_audit_response(current_master_response) and
+                                                        similarity_calculator.is_note_audit_response(candidate_response)
+                                                    )
 
-                                            # 2) Choose what text to compare + update counters
-                                            if is_note_audit:
-                                                # Note Audit → count matching notes (exact match)
-                                                st.session_state.noteaudit_count += 1
-                                                
-                                                # Use note-level matching instead of text similarity
-                                                similarity_result = similarity_calculator.calculate_noteaudit_similarity(
-                                                    master_response=current_master_response,
-                                                    candidate_response=candidate_response
-                                                )
+                                                    # 2) Choose what text to compare + update counters
+                                                    if is_note_audit:
+                                                        # Note Audit → count matching notes (exact match)
+                                                        st.session_state.noteaudit_count += 1
+                                                        
+                                                        # Use note-level matching instead of text similarity
+                                                        similarity_result = similarity_calculator.calculate_noteaudit_similarity(
+                                                            master_response=current_master_response,
+                                                            candidate_response=candidate_response
+                                                        )
 
-                                            else:
-                                                # Rewrite / Summarize → compare full text semantically
-                                                st.session_state.rewrite_count += 1
-                                                
-                                                # Use text-based similarity
-                                                master_text = similarity_calculator.extract_response_text(current_master_response)
-                                                candidate_text = similarity_calculator.extract_response_text(candidate_response)
+                                                    else:
+                                                        # Rewrite / Summarize → compare full text semantically
+                                                        st.session_state.rewrite_count += 1
+                                                        
+                                                        # Use text-based similarity
+                                                        master_text = similarity_calculator.extract_response_text(current_master_response)
+                                                        candidate_text = similarity_calculator.extract_response_text(candidate_response)
 
-                                                similarity_result = similarity_calculator.calculate_similarity(
-                                                    master_response=master_text,
-                                                    candidate_response=candidate_text,
-                                                    method="combined"
-                                                )
-                                                # DEBUG - Remove this after testing
-                                                print(f"\n=== DEBUG ===")
-                                                print(f"Master extracted: '{master_text}'")
-                                                print(f"Llama extracted: '{candidate_text}'")
-                                                print(f"Are they equal? {master_text == candidate_text}")
-                                                print(f"Master length: {len(master_text)}, Llama length: {len(candidate_text)}")
-                                                print(f"Similarity: {similarity_result['similarity_percentage']}%")
-                                                print(f"=== END DEBUG ===\n")
-                                            # Update metrics with similarity results
-                                            metrics["similarity_percentage"] = similarity_result.get("similarity_percentage", 0.0)
-                                            metrics["similarity_score"] = similarity_result.get("similarity_score", 0.0)
-                                            metrics["master_model"] = master_model_type
-                                            if "cosine_score" in similarity_result:
-                                                metrics["similarity_cosine"] = similarity_result.get("cosine_score", 0.0)
-                                                metrics["similarity_jaccard"] = similarity_result.get("jaccard_score", 0.0)
-                                                metrics["similarity_levenshtein"] = similarity_result.get("levenshtein_score", 0.0)
+                                                        similarity_result = similarity_calculator.calculate_similarity(
+                                                            master_response=master_text,
+                                                            candidate_response=candidate_text,
+                                                            method="combined"
+                                                        )
+                                                        # DEBUG - Remove this after testing
+                                                        print(f"\n=== DEBUG ===")
+                                                        print(f"Master extracted: '{master_text}'")
+                                                        print(f"Llama extracted: '{candidate_text}'")
+                                                        print(f"Are they equal? {master_text == candidate_text}")
+                                                        print(f"Master length: {len(master_text)}, Llama length: {len(candidate_text)}")
+                                                        print(f"Similarity: {similarity_result['similarity_percentage']}%")
+                                                        print(f"=== END DEBUG ===\n")
+                                                    # Update metrics with similarity results
+                                                    metrics["similarity_percentage"] = similarity_result.get("similarity_percentage", 0.0)
+                                                    metrics["similarity_score"] = similarity_result.get("similarity_score", 0.0)
+                                                    metrics["master_model"] = master_model_type
+                                                    if "cosine_score" in similarity_result:
+                                                        metrics["similarity_cosine"] = similarity_result.get("cosine_score", 0.0)
+                                                        metrics["similarity_jaccard"] = similarity_result.get("jaccard_score", 0.0)
+                                                        metrics["similarity_levenshtein"] = similarity_result.get("levenshtein_score", 0.0)
 
-                                            # Debug line for you + users
-                                            if is_note_audit and 'matching_notes' in similarity_result and 'total_notes' in similarity_result:
-                                                matching = similarity_result['matching_notes']
-                                                total = similarity_result['total_notes']
-                                                st.success(
-                                                    f"✅ {model.get('name', 'unknown')}: "
-                                                    f"{metrics['similarity_percentage']:.2f}% "
-                                                    f"({matching}/{total} notes match) - Note Audit"
-                                                )
-                                            else:
-                                                st.success(
-                                                    f"✅ {model.get('name', 'unknown')}: "
-                                                    f"{metrics['similarity_percentage']:.2f}% "
-                                                    f"(semantic similarity) - Rewrite/Summarize"
-                                                )
-                                        except Exception as e:
-                                            metrics["similarity_error"] = str(e)
-                                            metrics["similarity_percentage"] = 0.0
-                                            st.warning(f" Similarity calculation error for {model.get('name', 'unknown')}: {e}")
-                                            import traceback
-                                            st.error(f"Error details: {traceback.format_exc()}")
-                                        elif use_master and not current_master_response:
-                                            st.warning(" No master response found for prompt. Master model may have failed.")
-                                        elif use_master and metrics.get("status") != "success":
-                                            st.warning(f" Cannot calculate similarity: model evaluation failed for {model.get('name', 'unknown')}")
+                                                    # Debug line for you + users
+                                                    if is_note_audit and 'matching_notes' in similarity_result and 'total_notes' in similarity_result:
+                                                        matching = similarity_result['matching_notes']
+                                                        total = similarity_result['total_notes']
+                                                        st.success(
+                                                            f"✅ {model.get('name', 'unknown')}: "
+                                                            f"{metrics['similarity_percentage']:.2f}% "
+                                                            f"({matching}/{total} notes match) - Note Audit"
+                                                        )
+                                                    else:
+                                                        st.success(
+                                                            f"✅ {model.get('name', 'unknown')}: "
+                                                            f"{metrics['similarity_percentage']:.2f}% "
+                                                            f"(semantic similarity) - Rewrite/Summarize"
+                                                        )
+                                                except Exception as e:
+                                                    metrics["similarity_error"] = str(e)
+                                                    metrics["similarity_percentage"] = 0.0
+                                                    st.warning(f" Similarity calculation error for {model.get('name', 'unknown')}: {e}")
+                                                    import traceback
+                                                    st.error(f"Error details: {traceback.format_exc()}")
+                                    elif use_master and not current_master_response:
+                                        st.warning(" No master response found for prompt. Master model may have failed.")
+                                    elif use_master and metrics.get("status") != "success":
+                                        st.warning(f" Cannot calculate similarity: model evaluation failed for {model.get('name', 'unknown')}")
                                     
                                     # Append each format result
                                     fmt_format = fmt_metrics.get('response_format', 'unknown')
