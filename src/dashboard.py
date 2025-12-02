@@ -1677,6 +1677,22 @@ with st.sidebar:
             key="expect_json_sidebar"
         )
         
+        # Format Selection for Comparison
+        response_format = st.selectbox(
+            "Response Format",
+            options=["json", "toon"],
+            index=0,
+            help="Select the format for model responses. Use 'toon' for toon format or 'json' for JSON format.",
+            key="response_format_sidebar"
+        )
+        
+        compare_formats = st.checkbox(
+            "Compare Formats (JSON vs TOON)",
+            value=False,
+            help="Run evaluation with both JSON and TOON formats and compare metrics",
+            key="compare_formats_sidebar"
+        )
+        
         format_as_json = st.checkbox(
             "Format Prompt as JSON",
             value=False,
@@ -1960,6 +1976,8 @@ with tab1:
         selected_model_names = st.session_state.selected_models
         expect_json = st.session_state.get('expect_json_sidebar', True)  # Default fallback
         format_as_json = st.session_state.get('format_as_json_sidebar', False)
+        response_format = st.session_state.get('response_format_sidebar', 'json')
+        compare_formats = st.session_state.get('compare_formats_sidebar', False)
         st.session_state.noteaudit_count = 0
         st.session_state.rewrite_count = 0
         
@@ -2074,7 +2092,7 @@ with tab1:
                                 status.update(label=f" Getting master model response for prompt {prompt_idx+1}/{len(prompts_to_evaluate)}... ({current_evaluation}/{total_evaluations})")
                                 progress_bar.progress(current_evaluation / total_evaluations)
                                 
-                                # Format prompt for master model
+                                # Format prompt for master model based on response format
                                 final_prompt = current_prompt
                                 if format_as_json:
                                     try:
@@ -2086,8 +2104,14 @@ with tab1:
                                             "instruction": "Please respond to the following prompt. If JSON format is requested, return your answer as valid JSON."
                                         }
                                         final_prompt = json.dumps(prompt_json, indent=2)
-                                elif prompt_expected_json:
+                                elif compare_formats:
+                                    # When comparing formats, use JSON format for master model
+                                    if prompt_expected_json:
+                                        final_prompt = f"{current_prompt}\n\nPlease respond in valid JSON format."
+                                elif response_format == "json" and prompt_expected_json:
                                     final_prompt = f"{current_prompt}\n\nPlease respond in valid JSON format."
+                                elif response_format == "toon":
+                                    final_prompt = f"{current_prompt}\n\nPlease respond in TOON format (structured, concise, and visually organized format)."
                                 
                                 # Get generation params from first model (or use defaults)
                                 gen_params = model_registry.get_generation_params(selected_models[0]) if selected_models else {}
@@ -2170,38 +2194,59 @@ with tab1:
                             st.write(f"🔍 **Evaluating**: {model_name} (Model {model_idx+1}/{len(selected_models)})")
                             
                             try:
-                                # Format prompt as JSON if requested
-                                final_prompt = current_prompt
-                                if format_as_json:
-                                    try:
-                                        json.loads(current_prompt)
-                                        final_prompt = current_prompt
-                                    except (json.JSONDecodeError, ValueError):
-                                        prompt_json = {
-                                            "prompt": current_prompt,
-                                            "instruction": "Please respond to the following prompt. If JSON format is requested, return your answer as valid JSON."
-                                        }
-                                        final_prompt = json.dumps(prompt_json, indent=2)
+                                # Determine which formats to test
+                                formats_to_test = []
+                                if compare_formats:
+                                    formats_to_test = ["json", "toon"]
                                 else:
-                                    # Use prompt-specific expected_json, not the global setting
-                                    if prompt_expected_json:
-                                        final_prompt = f"{current_prompt}\n\nPlease respond in valid JSON format."
+                                    formats_to_test = [response_format]
                                 
-                                metrics = evaluator.evaluate_prompt(
-                                    prompt=final_prompt,
-                                    model=model,
-                                    prompt_id=prompt_prompt_id,
-                                    expected_json=prompt_expected_json,  # Use prompt-specific expected_json
-                                    run_id=f"dashboard_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                                )
+                                # Evaluate for each format
+                                format_results = []
+                                for fmt in formats_to_test:
+                                    # Format prompt based on format type
+                                    final_prompt = current_prompt
+                                    if format_as_json:
+                                        try:
+                                            json.loads(current_prompt)
+                                            final_prompt = current_prompt
+                                        except (json.JSONDecodeError, ValueError):
+                                            prompt_json = {
+                                                "prompt": current_prompt,
+                                                "instruction": "Please respond to the following prompt. If JSON format is requested, return your answer as valid JSON."
+                                            }
+                                            final_prompt = json.dumps(prompt_json, indent=2)
+                                    else:
+                                        # Add format-specific instruction
+                                        if fmt == "json":
+                                            if prompt_expected_json:
+                                                final_prompt = f"{current_prompt}\n\nPlease respond in valid JSON format."
+                                        elif fmt == "toon":
+                                            final_prompt = f"{current_prompt}\n\nPlease respond in TOON format (structured, concise, and visually organized format)."
+                                    
+                                    # Evaluate with this format
+                                    metrics = evaluator.evaluate_prompt(
+                                        prompt=final_prompt,
+                                        model=model,
+                                        prompt_id=prompt_prompt_id,
+                                        expected_json=(fmt == "json" and prompt_expected_json),
+                                        run_id=f"dashboard_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                                    )
+                                    
+                                    # Add format tracking to metrics
+                                    metrics["response_format"] = fmt
+                                    format_results.append(metrics)
                                 
-                                # Calculate similarity if master model is enabled
-                                # Use master_response from the current prompt's evaluation
-                                current_master_response = master_responses.get(current_prompt, None)
-                                                                # Calculate similarity if master model is enabled
-                                # Use master_response from the current prompt's evaluation
-                                current_master_response = master_responses.get(current_prompt, None)
-                                if use_master and current_master_response and metrics.get("status") == "success":
+                                # Process each format result for similarity calculation and append
+                                for fmt_idx, fmt_metrics in enumerate(format_results):
+                                    # Use first format result for similarity calculation if master model is enabled
+                                    if fmt_idx == 0:
+                                        metrics = fmt_metrics
+                                        
+                                        # Calculate similarity if master model is enabled
+                                        # Use master_response from the current prompt's evaluation
+                                        current_master_response = master_responses.get(current_prompt, None)
+                                        if use_master and current_master_response and metrics.get("status") == "success":
                                     candidate_response = metrics.get("response", "")
                                     if candidate_response:
                                         try:
@@ -2273,19 +2318,19 @@ with tab1:
                                             st.warning(f" Similarity calculation error for {model.get('name', 'unknown')}: {e}")
                                             import traceback
                                             st.error(f"Error details: {traceback.format_exc()}")
-                                elif use_master and not current_master_response:
-                                    st.warning(" No master response found for prompt. Master model may have failed.")
-                                elif use_master and metrics.get("status") != "success":
-                                    st.warning(f" Cannot calculate similarity: model evaluation failed for {model.get('name', 'unknown')}")
-
-                                
-                                # REAL-TIME LOGGING: Log result before appending
-                                result_status = metrics.get('status', 'unknown')
-                                result_error = metrics.get('error', 'None')
-                                st.write(f"📝 **Result for {model_name}**: Status={result_status}, Error={result_error}")
-                                
-                                results.append(metrics)
-                                st.write(f"✅ **Added to results**: {model_name} (Total results: {len(results)})")
+                                        elif use_master and not current_master_response:
+                                            st.warning(" No master response found for prompt. Master model may have failed.")
+                                        elif use_master and metrics.get("status") != "success":
+                                            st.warning(f" Cannot calculate similarity: model evaluation failed for {model.get('name', 'unknown')}")
+                                    
+                                    # Append each format result
+                                    fmt_format = fmt_metrics.get('response_format', 'unknown')
+                                    result_status = fmt_metrics.get('status', 'unknown')
+                                    result_error = fmt_metrics.get('error', 'None')
+                                    st.write(f"📝 **Result for {model_name} ({fmt_format.upper()})**: Status={result_status}, Error={result_error}")
+                                    
+                                    results.append(fmt_metrics)
+                                    st.write(f"✅ **Added to results**: {model_name} ({fmt_format.upper()}) (Total results: {len(results)})")
                             
                             except Exception as e:
                                 # REAL-TIME LOGGING: Log exception details
@@ -2517,6 +2562,223 @@ with tab1:
                 """,
                 unsafe_allow_html=True
             )
+            
+            # Format Comparison Section
+            if compare_formats and len(results) > 0:
+                st.markdown("---")
+                st.markdown("### 📊 Format Comparison: JSON vs TOON")
+                
+                # Group results by format
+                json_results = [r for r in results if r.get('response_format') == 'json']
+                toon_results = [r for r in results if r.get('response_format') == 'toon']
+                
+                if json_results and toon_results:
+                    # Create comparison DataFrame
+                    comparison_data = []
+                    
+                    # Group by model name for comparison
+                    json_by_model = {}
+                    toon_by_model = {}
+                    
+                    for r in json_results:
+                        model_name = r.get('model_name', 'unknown')
+                        if model_name not in json_by_model:
+                            json_by_model[model_name] = []
+                        json_by_model[model_name].append(r)
+                    
+                    for r in toon_results:
+                        model_name = r.get('model_name', 'unknown')
+                        if model_name not in toon_by_model:
+                            toon_by_model[model_name] = []
+                        toon_by_model[model_name].append(r)
+                    
+                    # Calculate averages for each model and format
+                    for model_name in set(list(json_by_model.keys()) + list(toon_by_model.keys())):
+                        json_model_results = json_by_model.get(model_name, [])
+                        toon_model_results = toon_by_model.get(model_name, [])
+                        
+                        if json_model_results and toon_model_results:
+                            # Calculate averages for JSON
+                            json_avg_latency = sum(r.get('latency_ms', 0) for r in json_model_results) / len(json_model_results)
+                            json_avg_input_tokens = sum(r.get('input_tokens', 0) for r in json_model_results) / len(json_model_results)
+                            json_avg_output_tokens = sum(r.get('output_tokens', 0) for r in json_model_results) / len(json_model_results)
+                            json_avg_cost = sum(r.get('cost_usd_total', 0) for r in json_model_results) / len(json_model_results)
+                            json_total_prompts = len(json_model_results)
+                            
+                            # Calculate averages for TOON
+                            toon_avg_latency = sum(r.get('latency_ms', 0) for r in toon_model_results) / len(toon_model_results)
+                            toon_avg_input_tokens = sum(r.get('input_tokens', 0) for r in toon_model_results) / len(toon_model_results)
+                            toon_avg_output_tokens = sum(r.get('output_tokens', 0) for r in toon_model_results) / len(toon_model_results)
+                            toon_avg_cost = sum(r.get('cost_usd_total', 0) for r in toon_model_results) / len(toon_model_results)
+                            toon_total_prompts = len(toon_model_results)
+                            
+                            # Calculate differences
+                            latency_diff = toon_avg_latency - json_avg_latency
+                            latency_diff_pct = (latency_diff / json_avg_latency * 100) if json_avg_latency > 0 else 0
+                            
+                            input_tokens_diff = toon_avg_input_tokens - json_avg_input_tokens
+                            input_tokens_diff_pct = (input_tokens_diff / json_avg_input_tokens * 100) if json_avg_input_tokens > 0 else 0
+                            
+                            output_tokens_diff = toon_avg_output_tokens - json_avg_output_tokens
+                            output_tokens_diff_pct = (output_tokens_diff / json_avg_output_tokens * 100) if json_avg_output_tokens > 0 else 0
+                            
+                            cost_diff = toon_avg_cost - json_avg_cost
+                            cost_diff_pct = (cost_diff / json_avg_cost * 100) if json_avg_cost > 0 else 0
+                            
+                            comparison_data.append({
+                                'Model': model_name,
+                                'Format': 'JSON',
+                                'Latency (ms)': round(json_avg_latency, 2),
+                                'Input Tokens': round(json_avg_input_tokens, 1),
+                                'Output Tokens': round(json_avg_output_tokens, 1),
+                                'Cost (USD)': round(json_avg_cost, 6),
+                                'Prompts': json_total_prompts
+                            })
+                            
+                            comparison_data.append({
+                                'Model': model_name,
+                                'Format': 'TOON',
+                                'Latency (ms)': round(toon_avg_latency, 2),
+                                'Input Tokens': round(toon_avg_input_tokens, 1),
+                                'Output Tokens': round(toon_avg_output_tokens, 1),
+                                'Cost (USD)': round(toon_avg_cost, 6),
+                                'Prompts': toon_total_prompts
+                            })
+                    
+                    if comparison_data:
+                        comparison_df = pd.DataFrame(comparison_data)
+                        
+                        # Display comparison table
+                        st.dataframe(comparison_df, use_container_width=True)
+                        
+                        # Create comparison charts
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            # Latency comparison
+                            fig_latency = go.Figure()
+                            for model_name in comparison_df['Model'].unique():
+                                model_data = comparison_df[comparison_df['Model'] == model_name]
+                                json_latency = model_data[model_data['Format'] == 'JSON']['Latency (ms)'].values[0] if len(model_data[model_data['Format'] == 'JSON']) > 0 else 0
+                                toon_latency = model_data[model_data['Format'] == 'TOON']['Latency (ms)'].values[0] if len(model_data[model_data['Format'] == 'TOON']) > 0 else 0
+                                
+                                fig_latency.add_trace(go.Bar(
+                                    name=f'{model_name} - JSON',
+                                    x=[f'{model_name}'],
+                                    y=[json_latency],
+                                    marker_color='#1f77b4'
+                                ))
+                                fig_latency.add_trace(go.Bar(
+                                    name=f'{model_name} - TOON',
+                                    x=[f'{model_name}'],
+                                    y=[toon_latency],
+                                    marker_color='#ff7f0e'
+                                ))
+                            
+                            fig_latency.update_layout(
+                                title='Latency Comparison (ms)',
+                                barmode='group',
+                                height=400,
+                                template='plotly_white',
+                                xaxis_title='Model',
+                                yaxis_title='Latency (ms)'
+                            )
+                            st.plotly_chart(fig_latency, use_container_width=True)
+                        
+                        with col2:
+                            # Cost comparison
+                            fig_cost = go.Figure()
+                            for model_name in comparison_df['Model'].unique():
+                                model_data = comparison_df[comparison_df['Model'] == model_name]
+                                json_cost = model_data[model_data['Format'] == 'JSON']['Cost (USD)'].values[0] if len(model_data[model_data['Format'] == 'JSON']) > 0 else 0
+                                toon_cost = model_data[model_data['Format'] == 'TOON']['Cost (USD)'].values[0] if len(model_data[model_data['Format'] == 'TOON']) > 0 else 0
+                                
+                                fig_cost.add_trace(go.Bar(
+                                    name=f'{model_name} - JSON',
+                                    x=[f'{model_name}'],
+                                    y=[json_cost],
+                                    marker_color='#1f77b4'
+                                ))
+                                fig_cost.add_trace(go.Bar(
+                                    name=f'{model_name} - TOON',
+                                    x=[f'{model_name}'],
+                                    y=[toon_cost],
+                                    marker_color='#ff7f0e'
+                                ))
+                            
+                            fig_cost.update_layout(
+                                title='Cost Comparison (USD)',
+                                barmode='group',
+                                height=400,
+                                template='plotly_white',
+                                xaxis_title='Model',
+                                yaxis_title='Cost (USD)'
+                            )
+                            st.plotly_chart(fig_cost, use_container_width=True)
+                        
+                        # Token comparison
+                        col3, col4 = st.columns(2)
+                        with col3:
+                            fig_input_tokens = go.Figure()
+                            for model_name in comparison_df['Model'].unique():
+                                model_data = comparison_df[comparison_df['Model'] == model_name]
+                                json_tokens = model_data[model_data['Format'] == 'JSON']['Input Tokens'].values[0] if len(model_data[model_data['Format'] == 'JSON']) > 0 else 0
+                                toon_tokens = model_data[model_data['Format'] == 'TOON']['Input Tokens'].values[0] if len(model_data[model_data['Format'] == 'TOON']) > 0 else 0
+                                
+                                fig_input_tokens.add_trace(go.Bar(
+                                    name=f'{model_name} - JSON',
+                                    x=[f'{model_name}'],
+                                    y=[json_tokens],
+                                    marker_color='#1f77b4'
+                                ))
+                                fig_input_tokens.add_trace(go.Bar(
+                                    name=f'{model_name} - TOON',
+                                    x=[f'{model_name}'],
+                                    y=[toon_tokens],
+                                    marker_color='#ff7f0e'
+                                ))
+                            
+                            fig_input_tokens.update_layout(
+                                title='Input Tokens Comparison',
+                                barmode='group',
+                                height=400,
+                                template='plotly_white',
+                                xaxis_title='Model',
+                                yaxis_title='Input Tokens'
+                            )
+                            st.plotly_chart(fig_input_tokens, use_container_width=True)
+                        
+                        with col4:
+                            fig_output_tokens = go.Figure()
+                            for model_name in comparison_df['Model'].unique():
+                                model_data = comparison_df[comparison_df['Model'] == model_name]
+                                json_tokens = model_data[model_data['Format'] == 'JSON']['Output Tokens'].values[0] if len(model_data[model_data['Format'] == 'JSON']) > 0 else 0
+                                toon_tokens = model_data[model_data['Format'] == 'TOON']['Output Tokens'].values[0] if len(model_data[model_data['Format'] == 'TOON']) > 0 else 0
+                                
+                                fig_output_tokens.add_trace(go.Bar(
+                                    name=f'{model_name} - JSON',
+                                    x=[f'{model_name}'],
+                                    y=[json_tokens],
+                                    marker_color='#1f77b4'
+                                ))
+                                fig_output_tokens.add_trace(go.Bar(
+                                    name=f'{model_name} - TOON',
+                                    x=[f'{model_name}'],
+                                    y=[toon_tokens],
+                                    marker_color='#ff7f0e'
+                                ))
+                            
+                            fig_output_tokens.update_layout(
+                                title='Output Tokens Comparison',
+                                barmode='group',
+                                height=400,
+                                template='plotly_white',
+                                xaxis_title='Model',
+                                yaxis_title='Output Tokens'
+                            )
+                            st.plotly_chart(fig_output_tokens, use_container_width=True)
+                else:
+                    st.info("⚠️ Format comparison requires results from both JSON and TOON formats. Make sure 'Compare Formats' is enabled and evaluation completed successfully.")
             # Quick evaluation summary
             if results:
                 eval_col1, eval_col2, eval_col3, eval_col4 = st.columns(4)
