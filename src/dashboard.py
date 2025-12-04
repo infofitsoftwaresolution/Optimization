@@ -3837,8 +3837,25 @@ with tab2:
             st.rerun()
     
     # Reload data with current cache key to ensure sync in Tab 2
-    # Force clear cache first to ensure fresh data
+    # Try to bypass cache by reading directly first, then use cached version
+    raw_df_direct = pd.DataFrame()
+    if Path(raw_path).exists():
+        try:
+            raw_df_direct = pd.read_csv(raw_path, on_bad_lines='skip', engine='python')
+            print(f"📊 Direct read: {len(raw_df_direct)} rows")
+        except Exception as e:
+            print(f"⚠️ Direct read failed: {e}")
+    
+    # Use cached load_data function
     raw_df, agg_df = load_data(raw_path, agg_path, st.session_state.data_reload_key)
+    
+    # If direct read has data but cached doesn't, use direct read
+    if not raw_df_direct.empty and raw_df.empty:
+        print("⚠️ Cache issue detected - using direct read data")
+        raw_df = raw_df_direct
+        # Clear cache and reload
+        st.cache_data.clear()
+        st.session_state.data_reload_key += 1
     
     # Debug: Show file path and existence
     with st.expander("🔍 Debug Info", expanded=False):
