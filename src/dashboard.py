@@ -770,8 +770,8 @@ with st.sidebar:
         if 'system_prompts_list' not in st.session_state:
             st.session_state.system_prompts_list = []
         
-        # Input field for adding new system prompt
-        col1, col2 = st.columns([3, 1])
+        # Input field for adding new system prompt with inline add button
+        col1, col2 = st.columns([10, 1])
         with col1:
             new_system_prompt = st.text_input(
                 "Add System Prompt",
@@ -781,9 +781,9 @@ with st.sidebar:
                 label_visibility="visible"
             )
         with col2:
-            st.write("")  # Spacing
-            st.write("")  # Spacing
-            add_button = st.button("➕ Add", key="add_system_prompt_btn", use_container_width=True)
+            st.write("")  # Spacing for alignment
+            st.write("")  # Spacing for alignment
+            add_button = st.button("➕", key="add_system_prompt_btn", help="Add system prompt", use_container_width=True)
         
         # Handle adding new system prompt
         if add_button and new_system_prompt.strip():
@@ -1904,17 +1904,31 @@ with st.sidebar:
     st.session_state.master_model_type = master_model_type if use_master_model else None
     
     # Run Button in Sidebar
+    # Always show the button, but validate before running
+    run_button_disabled = False
+    if not prompts_to_use:
+        run_button_disabled = True
+        st.warning("⚠️ **No prompts available**. Please enter a custom prompt or upload a file.")
+    elif not st.session_state.get('selected_models', []):
+        run_button_disabled = True
+    
     if st.button(
-        " Run Evaluation", 
+        "🚀 Run Evaluation", 
         type="primary", 
         use_container_width=True, 
         key="run_eval_sidebar",
-        help="Run evaluation with selected models and prompts"
+        help="Run evaluation with selected models and prompts",
+        disabled=run_button_disabled
     ):
-        st.session_state.run_evaluation = True
-        st.session_state.prompts_to_evaluate = prompts_to_use
-        st.session_state.prompts_with_metadata = prompts_with_metadata  # Store metadata
-        st.rerun()
+        if not prompts_to_use:
+            st.error("❌ **Error**: No prompts available. Please enter a custom prompt or upload a file.")
+        elif not st.session_state.get('selected_models', []):
+            st.error("❌ **Error**: No models selected. Please select at least one model.")
+        else:
+            st.session_state.run_evaluation = True
+            st.session_state.prompts_to_evaluate = prompts_to_use
+            st.session_state.prompts_with_metadata = prompts_with_metadata  # Store metadata
+            st.rerun()
     
     # Support Section
     st.markdown("---")
