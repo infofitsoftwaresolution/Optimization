@@ -1947,6 +1947,10 @@ def load_data(raw_path: str, agg_path: str, cache_key: int = 0):
     raw_df = pd.DataFrame()
     agg_df = pd.DataFrame()
     
+    # Debug logging
+    print(f"🔍 load_data called: raw_path={raw_path}, cache_key={cache_key}")
+    print(f"   File exists: {Path(raw_path).exists()}")
+    
     try:
         if Path(raw_path).exists():
             # Read CSV with proper handling of multi-line fields
@@ -3822,8 +3826,38 @@ with tab1:
 with tab2:
     st.header(" Historical Analysis & Export")
     
+    # Add refresh button to manually reload data
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.caption("💡 Historical data is loaded from saved CSV files. Click refresh to reload.")
+    with col2:
+        if st.button("🔄 Refresh Data", key="refresh_historical_data"):
+            st.session_state.data_reload_key += 1
+            st.cache_data.clear()
+            st.rerun()
+    
     # Reload data with current cache key to ensure sync in Tab 2
+    # Force clear cache first to ensure fresh data
     raw_df, agg_df = load_data(raw_path, agg_path, st.session_state.data_reload_key)
+    
+    # Debug: Show file path and existence
+    with st.expander("🔍 Debug Info", expanded=False):
+        st.write(f"**CSV File Path:** `{raw_path}`")
+        file_exists = Path(raw_path).exists()
+        st.write(f"**File Exists:** {file_exists}")
+        if file_exists:
+            file_size = Path(raw_path).stat().st_size
+            st.write(f"**File Size:** {file_size} bytes")
+            try:
+                # Try to read file directly
+                test_df = pd.read_csv(raw_path, nrows=5, on_bad_lines='skip', engine='python')
+                st.write(f"**Test Read:** Success - {len(test_df)} rows (showing first 5)")
+                if not test_df.empty:
+                    st.write("**Columns:**", list(test_df.columns))
+            except Exception as e:
+                st.error(f"**Test Read Failed:** {e}")
+        st.write(f"**Loaded DataFrame:** {len(raw_df)} rows")
+        st.write(f"**Cache Key:** {st.session_state.data_reload_key}")
     
     if raw_df.empty:
         st.info("""
