@@ -771,8 +771,8 @@ with st.sidebar:
             st.session_state.system_prompts_list = []
         
         # Input field for adding new system prompt with inline add button
-        col1, col2 = st.columns([10, 1])
-        with col1:
+        input_col, button_col = st.columns([5, 1])
+        with input_col:
             new_system_prompt = st.text_input(
                 "Add System Prompt",
                 placeholder="Enter a system prompt...",
@@ -780,9 +780,9 @@ with st.sidebar:
                 key="new_system_prompt_input",
                 label_visibility="visible"
             )
-        with col2:
-            st.write("")  # Spacing for alignment
-            st.write("")  # Spacing for alignment
+        with button_col:
+            # Align button with input field
+            st.markdown("<br>", unsafe_allow_html=True)  # Add spacing to align with input
             add_button = st.button("➕", key="add_system_prompt_btn", help="Add system prompt", use_container_width=True)
         
         # Handle adding new system prompt
@@ -2570,6 +2570,7 @@ with tab1:
                     report_generator = ReportGenerator(data_runs_dir)
                     report_generator.generate_report()
                     
+                    # Store results in session state (keep for current session display)
                     st.session_state.evaluation_results = results
                     # Mark that we just saved results so data will be reloaded on next page load
                     st.session_state.just_saved_results = True
@@ -2595,9 +2596,16 @@ with tab1:
     
     raw_df, agg_df = load_data(raw_path, agg_path, st.session_state.data_reload_key)
     
-    # Show evaluation results summary if available
+    # Show evaluation results summary if available (from current session)
+    # Also ensure historical data from CSV is accessible
     if st.session_state.get('evaluation_results'):
         results = st.session_state.evaluation_results
+    elif not raw_df.empty:
+        # If no current session results, show historical data from CSV
+        results = raw_df.to_dict('records')
+        st.info("📊 Showing historical evaluation results from saved data.")
+    else:
+        results = []
         success_count = len([r for r in results if r.get('status') == 'success'])
         
         
