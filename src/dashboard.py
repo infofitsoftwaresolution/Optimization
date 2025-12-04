@@ -2121,14 +2121,14 @@ with tab1:
                                 st.text(current_system_prompt)
                         
                         for prompt_idx, current_prompt in enumerate(prompts_to_evaluate):
-                        # Get metadata for this prompt if available
-                        prompt_meta = prompt_metadata_map.get(current_prompt, {})
-                        prompt_expected_json = prompt_meta.get("expected_json", expect_json)
-                        prompt_prompt_id = prompt_meta.get("prompt_id", f"prompt_{prompt_idx+1}" if len(prompts_to_evaluate) > 1 else None)
-                        
-                        # Get master model response first if enabled
-                        master_response = None
-                        if use_master and master_evaluator:
+                            # Get metadata for this prompt if available
+                            prompt_meta = prompt_metadata_map.get(current_prompt, {})
+                            prompt_expected_json = prompt_meta.get("expected_json", expect_json)
+                            prompt_prompt_id = prompt_meta.get("prompt_id", f"prompt_{prompt_idx+1}" if len(prompts_to_evaluate) > 1 else None)
+                            
+                            # Get master model response first if enabled
+                            master_response = None
+                            if use_master and master_evaluator:
                             try:
                                 current_evaluation += 1
                                 sys_prompt_info = f" (System Prompt {sys_prompt_idx+1}/{len(system_prompts_to_test)})" if current_system_prompt else ""
@@ -2184,10 +2184,10 @@ with tab1:
                                 import traceback
                                 st.error(f"Error details: {traceback.format_exc()}")
                                 use_master = False
-                        
-                        # Evaluate each selected model
-                        for model_idx, model in enumerate(selected_models):
-                            if model is None:
+                            
+                            # Evaluate each selected model
+                            for model_idx, model in enumerate(selected_models):
+                                if model is None:
                                 st.warning(f"⚠️ Model at index {model_idx} is None - skipping")
                                 error_metric = {
                                     "timestamp": datetime.utcnow().isoformat() + "Z",
@@ -2210,99 +2210,99 @@ with tab1:
                                 results.append(error_metric)
                                 continue
                             
-                            if 'name' not in model:
-                                st.warning(f"⚠️ Model at index {model_idx} has no 'name' field - skipping")
-                                error_metric = {
-                                    "timestamp": datetime.utcnow().isoformat() + "Z",
-                                    "run_id": f"dashboard_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-                                    "model_name": f"unknown_model_{model_idx}",
-                                    "model_id": "unknown",
-                                    "prompt_id": f"prompt_{prompt_idx+1}" if len(prompts_to_evaluate) > 1 else None,
-                                    "input_prompt": current_prompt,
-                                    "input_tokens": 0,
-                                    "output_tokens": 0,
-                                    "latency_ms": 0,
-                                    "json_valid": False,
-                                    "error": "Model missing 'name' field",
-                                    "status": "error",
-                                    "cost_usd_input": 0.0,
-                                    "cost_usd_output": 0.0,
-                                    "cost_usd_total": 0.0,
-                                    "response": ""
-                                }
-                                results.append(error_metric)
-                                continue
-                            
-                            current_evaluation += 1
-                            model_name = model.get('name', 'unknown')
-                            sys_prompt_info = f" (System Prompt {sys_prompt_idx+1}/{len(system_prompts_to_test)})" if current_system_prompt else ""
-                            status.update(label=f" Testing {model_name} with prompt {prompt_idx+1}/{len(prompts_to_evaluate)}{sys_prompt_info}... ({current_evaluation}/{total_evaluations})")
-                            progress_bar.progress(current_evaluation / total_evaluations)
-                            
-                            # REAL-TIME LOGGING: Log which model we're about to evaluate
-                            st.write(f"🔍 **Evaluating**: {model_name} (Model {model_idx+1}/{len(selected_models)})")
-                            
-                            try:
-                                # Determine which formats to test
-                                formats_to_test = []
-                                if compare_formats:
-                                    formats_to_test = ["json", "toon"]
-                                else:
-                                    formats_to_test = [response_format]
+                                if 'name' not in model:
+                                    st.warning(f"⚠️ Model at index {model_idx} has no 'name' field - skipping")
+                                    error_metric = {
+                                        "timestamp": datetime.utcnow().isoformat() + "Z",
+                                        "run_id": f"dashboard_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                                        "model_name": f"unknown_model_{model_idx}",
+                                        "model_id": "unknown",
+                                        "prompt_id": f"prompt_{prompt_idx+1}" if len(prompts_to_evaluate) > 1 else None,
+                                        "input_prompt": current_prompt,
+                                        "input_tokens": 0,
+                                        "output_tokens": 0,
+                                        "latency_ms": 0,
+                                        "json_valid": False,
+                                        "error": "Model missing 'name' field",
+                                        "status": "error",
+                                        "cost_usd_input": 0.0,
+                                        "cost_usd_output": 0.0,
+                                        "cost_usd_total": 0.0,
+                                        "response": ""
+                                    }
+                                    results.append(error_metric)
+                                    continue
                                 
-                                # Evaluate for each format
-                                format_results = []
-                                for fmt in formats_to_test:
-                                    # Format prompt based on format type
-                                    final_prompt = current_prompt
-                                    if format_as_json:
-                                        try:
-                                            json.loads(current_prompt)
-                                            final_prompt = current_prompt
-                                        except (json.JSONDecodeError, ValueError):
-                                            prompt_json = {
-                                                "prompt": current_prompt,
-                                                "instruction": "Please respond to the following prompt. If JSON format is requested, return your answer as valid JSON."
-                                            }
-                                            final_prompt = json.dumps(prompt_json, indent=2)
+                                current_evaluation += 1
+                                model_name = model.get('name', 'unknown')
+                                sys_prompt_info = f" (System Prompt {sys_prompt_idx+1}/{len(system_prompts_to_test)})" if current_system_prompt else ""
+                                status.update(label=f" Testing {model_name} with prompt {prompt_idx+1}/{len(prompts_to_evaluate)}{sys_prompt_info}... ({current_evaluation}/{total_evaluations})")
+                                progress_bar.progress(current_evaluation / total_evaluations)
+                                
+                                # REAL-TIME LOGGING: Log which model we're about to evaluate
+                                st.write(f"🔍 **Evaluating**: {model_name} (Model {model_idx+1}/{len(selected_models)})")
+                                
+                                try:
+                                    # Determine which formats to test
+                                    formats_to_test = []
+                                    if compare_formats:
+                                        formats_to_test = ["json", "toon"]
                                     else:
-                                        # Add format-specific instruction
-                                        if fmt == "json":
-                                            if prompt_expected_json:
-                                                final_prompt = f"{current_prompt}\n\nPlease respond in valid JSON format."
-                                        elif fmt == "toon":
-                                            final_prompt = f"{current_prompt}\n\nPlease respond in TOON format (structured, concise, and visually organized format)."
+                                        formats_to_test = [response_format]
                                     
-                                    # Evaluate with this format
-                                    metrics = evaluator.evaluate_prompt(
-                                        prompt=final_prompt,
-                                        model=model,
-                                        prompt_id=prompt_prompt_id,
-                                        expected_json=(fmt == "json" and prompt_expected_json),
-                                        run_id=f"dashboard_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-                                        system_prompt=current_system_prompt
-                                    )
-                                    
-                                    # Add format tracking and system prompt tracking to metrics
-                                    metrics["response_format"] = fmt
-                                    metrics["system_prompt"] = current_system_prompt if current_system_prompt else None
-                                    metrics["system_prompt_index"] = sys_prompt_idx if current_system_prompt else None
-                                    format_results.append(metrics)
-                                
-                                # Process each format result for similarity calculation and append
-                                for fmt_idx, fmt_metrics in enumerate(format_results):
-                                    # Use first format result for similarity calculation if master model is enabled
-                                    if fmt_idx == 0:
-                                        metrics = fmt_metrics
+                                    # Evaluate for each format
+                                    format_results = []
+                                    for fmt in formats_to_test:
+                                        # Format prompt based on format type
+                                        final_prompt = current_prompt
+                                        if format_as_json:
+                                            try:
+                                                json.loads(current_prompt)
+                                                final_prompt = current_prompt
+                                            except (json.JSONDecodeError, ValueError):
+                                                prompt_json = {
+                                                    "prompt": current_prompt,
+                                                    "instruction": "Please respond to the following prompt. If JSON format is requested, return your answer as valid JSON."
+                                                }
+                                                final_prompt = json.dumps(prompt_json, indent=2)
+                                        else:
+                                            # Add format-specific instruction
+                                            if fmt == "json":
+                                                if prompt_expected_json:
+                                                    final_prompt = f"{current_prompt}\n\nPlease respond in valid JSON format."
+                                            elif fmt == "toon":
+                                                final_prompt = f"{current_prompt}\n\nPlease respond in TOON format (structured, concise, and visually organized format)."
                                         
-                                        # Calculate similarity if master model is enabled
-                                        # Use master_response from the current prompt/system prompt combination
-                                        master_key = (current_prompt, current_system_prompt)
-                                        current_master_response = master_responses.get(master_key, None)
-                                        if use_master and current_master_response and metrics.get("status") == "success":
-                                            candidate_response = metrics.get("response", "")
-                                            if candidate_response:
-                                                try:
+                                        # Evaluate with this format
+                                        metrics = evaluator.evaluate_prompt(
+                                            prompt=final_prompt,
+                                            model=model,
+                                            prompt_id=prompt_prompt_id,
+                                            expected_json=(fmt == "json" and prompt_expected_json),
+                                            run_id=f"dashboard_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                                            system_prompt=current_system_prompt
+                                        )
+                                        
+                                        # Add format tracking and system prompt tracking to metrics
+                                        metrics["response_format"] = fmt
+                                        metrics["system_prompt"] = current_system_prompt if current_system_prompt else None
+                                        metrics["system_prompt_index"] = sys_prompt_idx if current_system_prompt else None
+                                        format_results.append(metrics)
+                                    
+                                    # Process each format result for similarity calculation and append
+                                    for fmt_idx, fmt_metrics in enumerate(format_results):
+                                        # Use first format result for similarity calculation if master model is enabled
+                                        if fmt_idx == 0:
+                                            metrics = fmt_metrics
+                                            
+                                            # Calculate similarity if master model is enabled
+                                            # Use master_response from the current prompt/system prompt combination
+                                            master_key = (current_prompt, current_system_prompt)
+                                            current_master_response = master_responses.get(master_key, None)
+                                            if use_master and current_master_response and metrics.get("status") == "success":
+                                                candidate_response = metrics.get("response", "")
+                                                if candidate_response:
+                                                    try:
                                                     # 1) Decide if this is a Note Audit prompt
                                                     is_note_audit = (
                                                         similarity_calculator.is_note_audit_response(current_master_response) and
@@ -2365,25 +2365,25 @@ with tab1:
                                                             f"{metrics['similarity_percentage']:.2f}% "
                                                             f"(semantic similarity) - Rewrite/Summarize"
                                                         )
-                                                except Exception as e:
-                                                    metrics["similarity_error"] = str(e)
-                                                    metrics["similarity_percentage"] = 0.0
-                                                    st.warning(f" Similarity calculation error for {model.get('name', 'unknown')}: {e}")
-                                                    import traceback
-                                                    st.error(f"Error details: {traceback.format_exc()}")
-                                    elif use_master and not current_master_response:
-                                        st.warning(" No master response found for prompt. Master model may have failed.")
-                                    elif use_master and metrics.get("status") != "success":
-                                        st.warning(f" Cannot calculate similarity: model evaluation failed for {model.get('name', 'unknown')}")
-                                    
-                                    # Append each format result
-                                    fmt_format = fmt_metrics.get('response_format', 'unknown')
-                                    result_status = fmt_metrics.get('status', 'unknown')
-                                    result_error = fmt_metrics.get('error', 'None')
-                                    st.write(f"📝 **Result for {model_name} ({fmt_format.upper()})**: Status={result_status}, Error={result_error}")
-                                    
-                                    results.append(fmt_metrics)
-                                    st.write(f"✅ **Added to results**: {model_name} ({fmt_format.upper()}) (Total results: {len(results)})")
+                                                    except Exception as e:
+                                                        metrics["similarity_error"] = str(e)
+                                                        metrics["similarity_percentage"] = 0.0
+                                                        st.warning(f" Similarity calculation error for {model.get('name', 'unknown')}: {e}")
+                                                        import traceback
+                                                        st.error(f"Error details: {traceback.format_exc()}")
+                                                elif use_master and not current_master_response:
+                                                    st.warning(" No master response found for prompt. Master model may have failed.")
+                                                elif use_master and metrics.get("status") != "success":
+                                                    st.warning(f" Cannot calculate similarity: model evaluation failed for {model.get('name', 'unknown')}")
+                                        
+                                        # Append each format result
+                                        fmt_format = fmt_metrics.get('response_format', 'unknown')
+                                        result_status = fmt_metrics.get('status', 'unknown')
+                                        result_error = fmt_metrics.get('error', 'None')
+                                        st.write(f"📝 **Result for {model_name} ({fmt_format.upper()})**: Status={result_status}, Error={result_error}")
+                                        
+                                        results.append(fmt_metrics)
+                                        st.write(f"✅ **Added to results**: {model_name} ({fmt_format.upper()}) (Total results: {len(results)})")
                             
                             except Exception as e:
                                 # REAL-TIME LOGGING: Log exception details
