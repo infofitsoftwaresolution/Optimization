@@ -63,27 +63,35 @@ if "db_initialized" not in st.session_state:
     try:
         # Test connection first - wrap in try-except to handle any import/connection errors
         connection_ok = False
+        db_error_message = None
         try:
             connection_ok = test_connection()
         except Exception as conn_error:
             logger.warning(f"Database connection test failed: {conn_error}. App will continue.")
             connection_ok = False
+            db_error_message = str(conn_error)
         
         if connection_ok:
             try:
                 # Create tables if they don't exist (safe to call even if tables already exist)
                 init_db()
                 st.session_state.db_initialized = True
+                st.session_state.db_connection_status = "connected"
             except Exception as init_error:
                 # Log but don't crash - app can still work if tables already exist
                 logger.warning(f"Database initialization warning (non-fatal): {init_error}")
                 st.session_state.db_initialized = True  # Mark as initialized to avoid retrying
+                st.session_state.db_connection_status = "connected"
         else:
             st.session_state.db_initialized = False
+            st.session_state.db_connection_status = "failed"
+            st.session_state.db_error_message = db_error_message
             logger.warning("Database connection failed - tables may not be created. App will continue.")
     except Exception as e:
         # Catch-all: Don't crash the app for any database-related error
         st.session_state.db_initialized = False
+        st.session_state.db_connection_status = "error"
+        st.session_state.db_error_message = str(e)
         try:
             logger.warning(f"Database initialization skipped (non-fatal): {e}. App will continue without auto-creating tables.")
         except:
@@ -1929,6 +1937,42 @@ with st.sidebar:
             st.session_state.prompts_to_evaluate = prompts_to_use
             st.session_state.prompts_with_metadata = prompts_with_metadata  # Store metadata
             st.rerun()
+    
+    # Database Status Section
+    st.markdown("---")
+    with st.expander("🔍 Database Status", expanded=False):
+        db_status = st.session_state.get('db_connection_status', 'unknown')
+        db_initialized = st.session_state.get('db_initialized', False)
+        
+        # Check environment variables
+        db_host = os.getenv("DB_HOST", "Not set")
+        db_user = os.getenv("DB_USER", "Not set")
+        db_name = os.getenv("DB_NAME", "Not set")
+        db_port = os.getenv("DB_PORT", "Not set")
+        db_password_set = "✅ Set" if os.getenv("DB_PASSWORD") else "❌ Not set"
+        
+        if db_status == "connected":
+            st.success("✅ Database: Connected")
+        elif db_status == "failed":
+            st.error("❌ Database: Connection Failed")
+            if st.session_state.get('db_error_message'):
+                st.caption(f"Error: {st.session_state.db_error_message[:100]}")
+        else:
+            st.info("ℹ️ Database: Status Unknown")
+        
+        st.write("**Configuration:**")
+        st.write(f"- DB_HOST: `{db_host[:30]}...`" if len(str(db_host)) > 30 else f"- DB_HOST: `{db_host}`")
+        st.write(f"- DB_USER: `{db_user}`")
+        st.write(f"- DB_NAME: `{db_name}`")
+        st.write(f"- DB_PORT: `{db_port}`")
+        st.write(f"- DB_PASSWORD: {db_password_set}")
+        st.write(f"- Initialized: {'✅ Yes' if db_initialized else '❌ No'}")
+        
+        # Check if .env file exists
+        env_path = Path(__file__).parent.parent / ".env"
+        st.write(f"- .env file: {'✅ Exists' if env_path.exists() else '❌ Not found'}")
+        if env_path.exists():
+            st.caption(f"Path: `{env_path}`")
     
     # Support Section
     st.markdown("---")

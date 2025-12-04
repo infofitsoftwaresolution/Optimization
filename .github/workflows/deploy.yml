@@ -342,6 +342,84 @@ jobs:
         target: "/home/ec2-user/Optimization/"
         strip_components: 0
 
+    - name: Verify database secrets on EC2
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        port: 22
+        command_timeout: 30s
+        script: |
+          cd /home/ec2-user/Optimization || exit 1
+          echo "🔍 Verifying database secrets..."
+          
+          if [ ! -f ".env" ]; then
+            echo "❌ ERROR: .env file not found!"
+            exit 1
+          fi
+          
+          echo "✅ .env file exists"
+          
+          # Check if database variables are set (without showing values)
+          if grep -q "^DB_HOST=" .env; then
+            DB_HOST_VALUE=$(grep "^DB_HOST=" .env | cut -d'=' -f2-)
+            if [ -n "$DB_HOST_VALUE" ]; then
+              echo "✅ DB_HOST is set (value: ${DB_HOST_VALUE:0:20}...)"
+            else
+              echo "⚠️  DB_HOST is empty"
+            fi
+          else
+            echo "❌ DB_HOST not found in .env"
+          fi
+          
+          if grep -q "^DB_USER=" .env; then
+            DB_USER_VALUE=$(grep "^DB_USER=" .env | cut -d'=' -f2-)
+            if [ -n "$DB_USER_VALUE" ]; then
+              echo "✅ DB_USER is set (value: $DB_USER_VALUE)"
+            else
+              echo "⚠️  DB_USER is empty"
+            fi
+          else
+            echo "❌ DB_USER not found in .env"
+          fi
+          
+          if grep -q "^DB_PASSWORD=" .env; then
+            DB_PASSWORD_VALUE=$(grep "^DB_PASSWORD=" .env | cut -d'=' -f2-)
+            if [ -n "$DB_PASSWORD_VALUE" ]; then
+              echo "✅ DB_PASSWORD is set (length: ${#DB_PASSWORD_VALUE} characters)"
+            else
+              echo "⚠️  DB_PASSWORD is empty"
+            fi
+          else
+            echo "❌ DB_PASSWORD not found in .env"
+          fi
+          
+          if grep -q "^DB_NAME=" .env; then
+            DB_NAME_VALUE=$(grep "^DB_NAME=" .env | cut -d'=' -f2-)
+            if [ -n "$DB_NAME_VALUE" ]; then
+              echo "✅ DB_NAME is set (value: $DB_NAME_VALUE)"
+            else
+              echo "⚠️  DB_NAME is empty"
+            fi
+          else
+            echo "⚠️  DB_NAME not found in .env (will default to 'postgres')"
+          fi
+          
+          if grep -q "^DB_PORT=" .env; then
+            DB_PORT_VALUE=$(grep "^DB_PORT=" .env | cut -d'=' -f2-)
+            if [ -n "$DB_PORT_VALUE" ]; then
+              echo "✅ DB_PORT is set (value: $DB_PORT_VALUE)"
+            else
+              echo "⚠️  DB_PORT is empty (will default to 5432)"
+            fi
+          else
+            echo "⚠️  DB_PORT not found in .env (will default to 5432)"
+          fi
+          
+          echo ""
+          echo "📋 Summary: Database secrets verification complete"
+
     - name: Clear virtual environment and prepare for fresh install
       uses: appleboy/ssh-action@v1.0.3
       with:
