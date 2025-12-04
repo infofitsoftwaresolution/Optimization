@@ -125,8 +125,20 @@ jobs:
           if [ -f ".env" ]; then
             cp .env /tmp/optimization_env_backup
           fi
-          # Remove old files (we'll create fresh .venv after extraction)
-          find . -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+          # Remove old files safely (exclude .venv which may be in use)
+          # Remove .venv separately first if it exists
+          if [ -d ".venv" ]; then
+            rm -rf .venv 2>/dev/null || true
+          fi
+          # Remove other files/directories, handling errors gracefully
+          for item in * .*; do
+            # Skip . and .. and .venv (already removed)
+            [ "$item" = "." ] && continue
+            [ "$item" = ".." ] && continue
+            [ "$item" = ".venv" ] && continue
+            [ -z "$item" ] && continue
+            rm -rf "$item" 2>/dev/null || true
+          done
 
     - name: Copy deployment archive to EC2
       uses: appleboy/scp-action@v0.1.7
