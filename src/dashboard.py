@@ -2606,8 +2606,10 @@ with tab1:
         st.info("📊 Showing historical evaluation results from saved data.")
     else:
         results = []
+    
+    # Calculate success count and display results if available
+    if results:
         success_count = len([r for r in results if r.get('status') == 'success'])
-        
         
         with st.expander(" Latest Evaluation Results", expanded=True):
             st.success(f" **Evaluation Complete!** {success_count} successful responses.")
@@ -3104,21 +3106,25 @@ with tab1:
                             st.dataframe(similarity_display_df, use_container_width=True, hide_index=True)
             
             # Detailed results table
-            st.subheader(" Detailed Results")
-            results_df = pd.DataFrame(results)
-            display_cols = ['model_name', 'latency_ms', 'input_tokens', 'output_tokens', 
-                          'cost_usd_total', 'json_valid', 'status']
-            
-            # Add similarity column if available (make it prominent)
-            if 'similarity_percentage' in results_df.columns:
-                display_cols.insert(1, 'similarity_percentage')  # Insert after model_name
-                st.info(" **Similarity scores** show how close each model's output is to the master model (ChatGPT). Higher percentage = more similar.")
-            
-            if 'error' in results_df.columns:
-                display_cols.append('error')
-            
-            available_cols = [col for col in display_cols if col in results_df.columns]
-            display_df = results_df[available_cols].copy()
+            if results and len(results) > 0:
+                st.subheader(" Detailed Results")
+                results_df = pd.DataFrame(results)
+                display_cols = ['model_name', 'latency_ms', 'input_tokens', 'output_tokens', 
+                              'cost_usd_total', 'json_valid', 'status']
+                
+                # Add similarity column if available (make it prominent)
+                if 'similarity_percentage' in results_df.columns:
+                    display_cols.insert(1, 'similarity_percentage')  # Insert after model_name
+                    st.info(" **Similarity scores** show how close each model's output is to the master model (ChatGPT). Higher percentage = more similar.")
+                
+                if 'error' in results_df.columns:
+                    display_cols.append('error')
+                
+                available_cols = [col for col in display_cols if col in results_df.columns]
+                if available_cols:
+                    display_df = results_df[available_cols].copy()
+                else:
+                    display_df = pd.DataFrame()
             
             # Format for display
             if 'latency_ms' in display_df.columns:
@@ -3142,10 +3148,16 @@ with tab1:
                     else:
                         return " No"
                 display_df['json_valid'] = display_df['json_valid'].apply(format_json_valid)
-            if 'status' in display_df.columns:
-                display_df['status'] = display_df['status'].apply(lambda x: " Success" if x == "success" else " Error")
-            
-            st.dataframe(display_df, use_container_width=True, height=200)
+                if 'status' in display_df.columns:
+                    display_df['status'] = display_df['status'].apply(lambda x: " Success" if x == "success" else " Error")
+                
+                if not display_df.empty:
+                    st.dataframe(display_df, use_container_width=True, height=200)
+                else:
+                    st.info("📊 No detailed results to display.")
+            else:
+                st.subheader(" Detailed Results")
+                st.info("📊 No evaluation results available. Run an evaluation from the sidebar to see results.")
         
         # Display JSON Output Responses - moved outside expander to avoid nesting
         if st.session_state.get('evaluation_results'):
