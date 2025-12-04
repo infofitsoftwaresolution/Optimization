@@ -2129,66 +2129,66 @@ with tab1:
                             # Get master model response first if enabled
                             master_response = None
                             if use_master and master_evaluator:
-                            try:
-                                current_evaluation += 1
-                                sys_prompt_info = f" (System Prompt {sys_prompt_idx+1}/{len(system_prompts_to_test)})" if current_system_prompt else ""
-                                status.update(label=f" Getting master model response for prompt {prompt_idx+1}/{len(prompts_to_evaluate)}{sys_prompt_info}... ({current_evaluation}/{total_evaluations})")
-                                progress_bar.progress(current_evaluation / total_evaluations)
-                                
-                                # Format prompt for master model based on response format
-                                final_prompt = current_prompt
-                                if format_as_json:
-                                    try:
-                                        json.loads(current_prompt)
-                                        final_prompt = current_prompt
-                                    except (json.JSONDecodeError, ValueError):
-                                        prompt_json = {
-                                            "prompt": current_prompt,
-                                            "instruction": "Please respond to the following prompt. If JSON format is requested, return your answer as valid JSON."
-                                        }
-                                        final_prompt = json.dumps(prompt_json, indent=2)
-                                elif compare_formats:
-                                    # When comparing formats, use JSON format for master model
-                                    if prompt_expected_json:
+                                try:
+                                    current_evaluation += 1
+                                    sys_prompt_info = f" (System Prompt {sys_prompt_idx+1}/{len(system_prompts_to_test)})" if current_system_prompt else ""
+                                    status.update(label=f" Getting master model response for prompt {prompt_idx+1}/{len(prompts_to_evaluate)}{sys_prompt_info}... ({current_evaluation}/{total_evaluations})")
+                                    progress_bar.progress(current_evaluation / total_evaluations)
+                                    
+                                    # Format prompt for master model based on response format
+                                    final_prompt = current_prompt
+                                    if format_as_json:
+                                        try:
+                                            json.loads(current_prompt)
+                                            final_prompt = current_prompt
+                                        except (json.JSONDecodeError, ValueError):
+                                            prompt_json = {
+                                                "prompt": current_prompt,
+                                                "instruction": "Please respond to the following prompt. If JSON format is requested, return your answer as valid JSON."
+                                            }
+                                            final_prompt = json.dumps(prompt_json, indent=2)
+                                    elif compare_formats:
+                                        # When comparing formats, use JSON format for master model
+                                        if prompt_expected_json:
+                                            final_prompt = f"{current_prompt}\n\nPlease respond in valid JSON format."
+                                    elif response_format == "json" and prompt_expected_json:
                                         final_prompt = f"{current_prompt}\n\nPlease respond in valid JSON format."
-                                elif response_format == "json" and prompt_expected_json:
-                                    final_prompt = f"{current_prompt}\n\nPlease respond in valid JSON format."
-                                elif response_format == "toon":
-                                    final_prompt = f"{current_prompt}\n\nPlease respond in TOON format (structured, concise, and visually organized format)."
-                                
-                                # Get generation params from first model (or use defaults)
-                                gen_params = model_registry.get_generation_params(selected_models[0]) if selected_models else {}
-                                master_metrics = master_evaluator.evaluate_prompt(
-                                    prompt=final_prompt,
-                                    temperature=gen_params.get("temperature", 0.7),
-                                    max_tokens=gen_params.get("max_tokens", 1500),
-                                    system_prompt=current_system_prompt
-                                )
-                                
-                                if master_metrics.get("status") == "success":
-                                    master_response = master_metrics.get("response", "")
-                                    # Store master response with system prompt key
-                                    master_key = (current_prompt, current_system_prompt)
-                                    master_responses[master_key] = master_response
-                                    # Store master model metrics for reference
-                                    master_metrics["is_master"] = True
-                                    master_metrics["system_prompt"] = current_system_prompt if current_system_prompt else None
-                                    master_metrics["system_prompt_index"] = sys_prompt_idx if current_system_prompt else None
-                                    results.append(master_metrics)
-                                    st.success(f" Master model response received ({len(master_response)} chars)")
-                                else:
-                                    st.warning(f" Master model evaluation failed: {master_metrics.get('error', 'Unknown error')}")
+                                    elif response_format == "toon":
+                                        final_prompt = f"{current_prompt}\n\nPlease respond in TOON format (structured, concise, and visually organized format)."
+                                    
+                                    # Get generation params from first model (or use defaults)
+                                    gen_params = model_registry.get_generation_params(selected_models[0]) if selected_models else {}
+                                    master_metrics = master_evaluator.evaluate_prompt(
+                                        prompt=final_prompt,
+                                        temperature=gen_params.get("temperature", 0.7),
+                                        max_tokens=gen_params.get("max_tokens", 1500),
+                                        system_prompt=current_system_prompt
+                                    )
+                                    
+                                    if master_metrics.get("status") == "success":
+                                        master_response = master_metrics.get("response", "")
+                                        # Store master response with system prompt key
+                                        master_key = (current_prompt, current_system_prompt)
+                                        master_responses[master_key] = master_response
+                                        # Store master model metrics for reference
+                                        master_metrics["is_master"] = True
+                                        master_metrics["system_prompt"] = current_system_prompt if current_system_prompt else None
+                                        master_metrics["system_prompt_index"] = sys_prompt_idx if current_system_prompt else None
+                                        results.append(master_metrics)
+                                        st.success(f" Master model response received ({len(master_response)} chars)")
+                                    else:
+                                        st.warning(f" Master model evaluation failed: {master_metrics.get('error', 'Unknown error')}")
+                                        use_master = False
+                                except Exception as e:
+                                    st.warning(f" Master model evaluation failed: {e}")
+                                    import traceback
+                                    st.error(f"Error details: {traceback.format_exc()}")
                                     use_master = False
-                            except Exception as e:
-                                st.warning(f" Master model evaluation failed: {e}")
-                                import traceback
-                                st.error(f"Error details: {traceback.format_exc()}")
-                                use_master = False
                             
                             # Evaluate each selected model
                             for model_idx, model in enumerate(selected_models):
                                 if model is None:
-                                st.warning(f"⚠️ Model at index {model_idx} is None - skipping")
+                                    st.warning(f"⚠️ Model at index {model_idx} is None - skipping")
                                 error_metric = {
                                     "timestamp": datetime.utcnow().isoformat() + "Z",
                                     "run_id": f"dashboard_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
@@ -2303,68 +2303,68 @@ with tab1:
                                                 candidate_response = metrics.get("response", "")
                                                 if candidate_response:
                                                     try:
-                                                    # 1) Decide if this is a Note Audit prompt
-                                                    is_note_audit = (
-                                                        similarity_calculator.is_note_audit_response(current_master_response) and
-                                                        similarity_calculator.is_note_audit_response(candidate_response)
-                                                    )
-
-                                                    # 2) Choose what text to compare + update counters
-                                                    if is_note_audit:
-                                                        # Note Audit → count matching notes (exact match)
-                                                        st.session_state.noteaudit_count += 1
-                                                        
-                                                        # Use note-level matching instead of text similarity
-                                                        similarity_result = similarity_calculator.calculate_noteaudit_similarity(
-                                                            master_response=current_master_response,
-                                                            candidate_response=candidate_response
+                                                        # 1) Decide if this is a Note Audit prompt
+                                                        is_note_audit = (
+                                                            similarity_calculator.is_note_audit_response(current_master_response) and
+                                                            similarity_calculator.is_note_audit_response(candidate_response)
                                                         )
 
-                                                    else:
-                                                        # Rewrite / Summarize → compare full text semantically
-                                                        st.session_state.rewrite_count += 1
-                                                        
-                                                        # Use text-based similarity
-                                                        master_text = similarity_calculator.extract_response_text(current_master_response)
-                                                        candidate_text = similarity_calculator.extract_response_text(candidate_response)
+                                                        # 2) Choose what text to compare + update counters
+                                                        if is_note_audit:
+                                                            # Note Audit → count matching notes (exact match)
+                                                            st.session_state.noteaudit_count += 1
+                                                            
+                                                            # Use note-level matching instead of text similarity
+                                                            similarity_result = similarity_calculator.calculate_noteaudit_similarity(
+                                                                master_response=current_master_response,
+                                                                candidate_response=candidate_response
+                                                            )
 
-                                                        similarity_result = similarity_calculator.calculate_similarity(
-                                                            master_response=master_text,
-                                                            candidate_response=candidate_text,
-                                                            method="combined"
-                                                        )
-                                                        # DEBUG - Remove this after testing
-                                                        print(f"\n=== DEBUG ===")
-                                                        print(f"Master extracted: '{master_text}'")
-                                                        print(f"Llama extracted: '{candidate_text}'")
-                                                        print(f"Are they equal? {master_text == candidate_text}")
-                                                        print(f"Master length: {len(master_text)}, Llama length: {len(candidate_text)}")
-                                                        print(f"Similarity: {similarity_result['similarity_percentage']}%")
-                                                        print(f"=== END DEBUG ===\n")
-                                                    # Update metrics with similarity results
-                                                    metrics["similarity_percentage"] = similarity_result.get("similarity_percentage", 0.0)
-                                                    metrics["similarity_score"] = similarity_result.get("similarity_score", 0.0)
-                                                    metrics["master_model"] = master_model_type
-                                                    if "cosine_score" in similarity_result:
-                                                        metrics["similarity_cosine"] = similarity_result.get("cosine_score", 0.0)
-                                                        metrics["similarity_jaccard"] = similarity_result.get("jaccard_score", 0.0)
-                                                        metrics["similarity_levenshtein"] = similarity_result.get("levenshtein_score", 0.0)
+                                                        else:
+                                                            # Rewrite / Summarize → compare full text semantically
+                                                            st.session_state.rewrite_count += 1
+                                                            
+                                                            # Use text-based similarity
+                                                            master_text = similarity_calculator.extract_response_text(current_master_response)
+                                                            candidate_text = similarity_calculator.extract_response_text(candidate_response)
 
-                                                    # Debug line for you + users
-                                                    if is_note_audit and 'matching_notes' in similarity_result and 'total_notes' in similarity_result:
-                                                        matching = similarity_result['matching_notes']
-                                                        total = similarity_result['total_notes']
-                                                        st.success(
-                                                            f"✅ {model.get('name', 'unknown')}: "
-                                                            f"{metrics['similarity_percentage']:.2f}% "
-                                                            f"({matching}/{total} notes match) - Note Audit"
-                                                        )
-                                                    else:
-                                                        st.success(
-                                                            f"✅ {model.get('name', 'unknown')}: "
-                                                            f"{metrics['similarity_percentage']:.2f}% "
-                                                            f"(semantic similarity) - Rewrite/Summarize"
-                                                        )
+                                                            similarity_result = similarity_calculator.calculate_similarity(
+                                                                master_response=master_text,
+                                                                candidate_response=candidate_text,
+                                                                method="combined"
+                                                            )
+                                                            # DEBUG - Remove this after testing
+                                                            print(f"\n=== DEBUG ===")
+                                                            print(f"Master extracted: '{master_text}'")
+                                                            print(f"Llama extracted: '{candidate_text}'")
+                                                            print(f"Are they equal? {master_text == candidate_text}")
+                                                            print(f"Master length: {len(master_text)}, Llama length: {len(candidate_text)}")
+                                                            print(f"Similarity: {similarity_result['similarity_percentage']}%")
+                                                            print(f"=== END DEBUG ===\n")
+                                                        # Update metrics with similarity results
+                                                        metrics["similarity_percentage"] = similarity_result.get("similarity_percentage", 0.0)
+                                                        metrics["similarity_score"] = similarity_result.get("similarity_score", 0.0)
+                                                        metrics["master_model"] = master_model_type
+                                                        if "cosine_score" in similarity_result:
+                                                            metrics["similarity_cosine"] = similarity_result.get("cosine_score", 0.0)
+                                                            metrics["similarity_jaccard"] = similarity_result.get("jaccard_score", 0.0)
+                                                            metrics["similarity_levenshtein"] = similarity_result.get("levenshtein_score", 0.0)
+
+                                                        # Debug line for you + users
+                                                        if is_note_audit and 'matching_notes' in similarity_result and 'total_notes' in similarity_result:
+                                                            matching = similarity_result['matching_notes']
+                                                            total = similarity_result['total_notes']
+                                                            st.success(
+                                                                f"✅ {model.get('name', 'unknown')}: "
+                                                                f"{metrics['similarity_percentage']:.2f}% "
+                                                                f"({matching}/{total} notes match) - Note Audit"
+                                                            )
+                                                        else:
+                                                            st.success(
+                                                                f"✅ {model.get('name', 'unknown')}: "
+                                                                f"{metrics['similarity_percentage']:.2f}% "
+                                                                f"(semantic similarity) - Rewrite/Summarize"
+                                                            )
                                                     except Exception as e:
                                                         metrics["similarity_error"] = str(e)
                                                         metrics["similarity_percentage"] = 0.0
@@ -2384,12 +2384,12 @@ with tab1:
                                         
                                         results.append(fmt_metrics)
                                         st.write(f"✅ **Added to results**: {model_name} ({fmt_format.upper()}) (Total results: {len(results)})")
-                            
-                            except Exception as e:
-                                # REAL-TIME LOGGING: Log exception details
-                                st.error(f"❌ **Exception evaluating {model_name}**: {str(e)}")
-                                import traceback
-                                st.code(traceback.format_exc())
+                                
+                                except Exception as e:
+                                    # REAL-TIME LOGGING: Log exception details
+                                    st.error(f"❌ **Exception evaluating {model_name}**: {str(e)}")
+                                    import traceback
+                                    st.code(traceback.format_exc())
                                 error_metric = {
                                     "timestamp": datetime.utcnow().isoformat() + "Z",
                                     "run_id": f"dashboard_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
