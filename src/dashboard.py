@@ -3871,17 +3871,28 @@ with tab2:
         st.write(f"**CSV File Path:** `{abs_raw_path}`")
         file_exists = abs_raw_path.exists() if abs_raw_path else False
         st.write(f"**File Exists:** {file_exists}")
-        if file_exists:
-            file_size = Path(raw_path).stat().st_size
+        if file_exists and abs_raw_path:
+            file_size = abs_raw_path.stat().st_size
             st.write(f"**File Size:** {file_size} bytes")
             try:
                 # Try to read file directly
-                test_df = pd.read_csv(raw_path, nrows=5, on_bad_lines='skip', engine='python')
+                test_df = pd.read_csv(abs_raw_path, nrows=5, on_bad_lines='skip', engine='python')
                 st.write(f"**Test Read:** Success - {len(test_df)} rows (showing first 5)")
                 if not test_df.empty:
                     st.write("**Columns:**", list(test_df.columns))
             except Exception as e:
                 st.error(f"**Test Read Failed:** {e}")
+        else:
+            # Show where data should be saved
+            st.warning(f"⚠️ **File not found**. Data will be saved to: `{abs_raw_path}`")
+            st.info("💡 **Tip**: Run an evaluation from the sidebar to create the CSV file.")
+            # Check if directory exists
+            if abs_raw_path:
+                dir_exists = abs_raw_path.parent.exists()
+                st.write(f"**Directory Exists:** {dir_exists}")
+                if not dir_exists:
+                    st.write(f"**Directory Path:** `{abs_raw_path.parent}`")
+                    st.info(f"📁 Directory will be created automatically when you save data.")
         st.write(f"**Loaded DataFrame:** {len(raw_df)} rows")
         st.write(f"**Cache Key:** {st.session_state.data_reload_key}")
     
