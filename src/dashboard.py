@@ -2105,11 +2105,16 @@ with tab1:
                     
                     if not valid_models:
                         st.error("❌ **Validation Error**: No valid models selected! Please check your model selection in the sidebar.")
+                        st.session_state.run_evaluation = False
                         st.stop()
+                    
+                    # Use only valid models for evaluation
+                    selected_models = valid_models
                     
                     # REAL-TIME VALIDATION: Verify prompts are provided
                     if not prompts_to_evaluate:
                         st.error("❌ **Validation Error**: No prompts provided! Please enter a prompt or upload a file.")
+                        st.session_state.run_evaluation = False
                         st.stop()
                     
                     # REAL-TIME VALIDATION: Verify AWS credentials
@@ -2230,26 +2235,26 @@ with tab1:
                             for model_idx, model in enumerate(selected_models):
                                 if model is None:
                                     st.warning(f"⚠️ Model at index {model_idx} is None - skipping")
-                                error_metric = {
-                                    "timestamp": datetime.utcnow().isoformat() + "Z",
-                                    "run_id": f"dashboard_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-                                    "model_name": f"unknown_model_{model_idx}",
-                                    "model_id": "unknown",
-                                    "prompt_id": f"prompt_{prompt_idx+1}" if len(prompts_to_evaluate) > 1 else None,
-                                    "input_prompt": current_prompt,
-                                    "input_tokens": 0,
-                                    "output_tokens": 0,
-                                    "latency_ms": 0,
-                                    "json_valid": False,
-                                    "error": "Model is None",
-                                    "status": "error",
-                                    "cost_usd_input": 0.0,
-                                    "cost_usd_output": 0.0,
-                                    "cost_usd_total": 0.0,
-                                    "response": ""
-                                }
-                                results.append(error_metric)
-                                continue
+                                    error_metric = {
+                                        "timestamp": datetime.utcnow().isoformat() + "Z",
+                                        "run_id": f"dashboard_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                                        "model_name": f"unknown_model_{model_idx}",
+                                        "model_id": "unknown",
+                                        "prompt_id": f"prompt_{prompt_idx+1}" if len(prompts_to_evaluate) > 1 else None,
+                                        "input_prompt": current_prompt,
+                                        "input_tokens": 0,
+                                        "output_tokens": 0,
+                                        "latency_ms": 0,
+                                        "json_valid": False,
+                                        "error": "Model is None",
+                                        "status": "error",
+                                        "cost_usd_input": 0.0,
+                                        "cost_usd_output": 0.0,
+                                        "cost_usd_total": 0.0,
+                                        "response": ""
+                                    }
+                                    results.append(error_metric)
+                                    continue
                             
                                 if 'name' not in model:
                                     st.warning(f"⚠️ Model at index {model_idx} has no 'name' field - skipping")
