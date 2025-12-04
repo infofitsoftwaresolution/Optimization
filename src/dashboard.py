@@ -1975,7 +1975,7 @@ def load_data(raw_path: str, agg_path: str, cache_key: int = 0):
             except Exception:
                 # If that fails, try with default settings
                 try:
-                    raw_df = pd.read_csv(raw_path, on_bad_lines='skip', engine='python')
+                    raw_df = pd.read_csv(abs_raw_path, on_bad_lines='skip', engine='python')
                 except Exception:
                     raw_df = pd.DataFrame()
         else:
@@ -1996,7 +1996,7 @@ def load_data(raw_path: str, agg_path: str, cache_key: int = 0):
                 )
             except Exception:
                 try:
-                    agg_df = pd.read_csv(agg_path, on_bad_lines='skip', engine='python')
+                    agg_df = pd.read_csv(abs_agg_path, on_bad_lines='skip', engine='python')
                 except Exception:
                     agg_df = pd.DataFrame()
         else:
@@ -3837,11 +3837,14 @@ with tab2:
             st.rerun()
     
     # Reload data with current cache key to ensure sync in Tab 2
+    # Convert to absolute path for file operations
+    abs_raw_path = Path(raw_path).resolve() if raw_path else None
+    
     # Try to bypass cache by reading directly first, then use cached version
     raw_df_direct = pd.DataFrame()
-    if Path(raw_path).exists():
+    if abs_raw_path and abs_raw_path.exists():
         try:
-            raw_df_direct = pd.read_csv(raw_path, on_bad_lines='skip', engine='python')
+            raw_df_direct = pd.read_csv(abs_raw_path, on_bad_lines='skip', engine='python')
             print(f"📊 Direct read: {len(raw_df_direct)} rows")
         except Exception as e:
             print(f"⚠️ Direct read failed: {e}")
@@ -3859,8 +3862,10 @@ with tab2:
     
     # Debug: Show file path and existence
     with st.expander("🔍 Debug Info", expanded=False):
-        st.write(f"**CSV File Path:** `{raw_path}`")
-        file_exists = Path(raw_path).exists()
+        # Convert to absolute path for display
+        abs_raw_path = Path(raw_path).resolve() if raw_path else None
+        st.write(f"**CSV File Path:** `{abs_raw_path}`")
+        file_exists = abs_raw_path.exists() if abs_raw_path else False
         st.write(f"**File Exists:** {file_exists}")
         if file_exists:
             file_size = Path(raw_path).stat().st_size
