@@ -2513,6 +2513,11 @@ with tab1:
                     data_runs_dir = project_root / "data" / "runs"
                     data_runs_dir.mkdir(parents=True, exist_ok=True)  # Ensure directory exists
                     
+                    # Debug: Show where data is being saved
+                    st.write(f"💾 **Saving to:** `{data_runs_dir.resolve() / 'raw_metrics.csv'}`")
+                    st.write(f"📂 **Directory exists:** {data_runs_dir.exists()}")
+                    st.write(f"📂 **Directory writable:** {os.access(data_runs_dir, os.W_OK)}")
+                    
                     # REAL-TIME VALIDATION: Validate results before saving
                     if not results:
                         st.error("❌ **Validation Error**: No results to save!")
@@ -2612,18 +2617,51 @@ with tab1:
         st.session_state.just_saved_results = False
         st.cache_data.clear()  # Clear all caches
     
-    raw_df, agg_df = load_data(raw_path, agg_path, st.session_state.data_reload_key)
+    # Reload data - use absolute paths to ensure consistency
+    abs_raw_path = Path(raw_path).resolve() if raw_path else None
+    abs_agg_path = Path(agg_path).resolve() if agg_path else None
+    raw_df, agg_df = load_data(str(abs_raw_path) if abs_raw_path else raw_path, 
+                               str(abs_agg_path) if abs_agg_path else agg_path, 
+                               st.session_state.data_reload_key)
+    
+    # Debug: Log data loading status
+    if st.session_state.get('debug_data_loading', False):
+        with st.expander("🔍 Debug: Data Loading Status", expanded=True):
+            st.write(f"**Raw path:** `{raw_path}`")
+            st.write(f"**Absolute raw path:** `{abs_raw_path}`")
+            st.write(f"**File exists:** {abs_raw_path.exists() if abs_raw_path else False}")
+            st.write(f"**Raw DataFrame loaded:** {len(raw_df)} rows")
+            st.write(f"**Cache key:** {st.session_state.data_reload_key}")
+            if abs_raw_path and abs_raw_path.exists():
+                st.write(f"**File size:** {abs_raw_path.stat().st_size} bytes")
+                st.write(f"**File modified:** {abs_raw_path.stat().st_mtime}")
+            if not raw_df.empty:
+                st.write(f"**Columns:** {list(raw_df.columns)}")
+                st.write(f"**First row model:** {raw_df.iloc[0].get('model_name', 'N/A') if len(raw_df) > 0 else 'N/A'}")
     
     # Show evaluation results summary if available (from current session)
     # Also ensure historical data from CSV is accessible
-    if st.session_state.get('evaluation_results'):
-        results = st.session_state.evaluation_results
+    # Check if we have valid current session results (non-empty list)
+    current_session_results = st.session_state.get('evaluation_results', [])
+    if current_session_results and len(current_session_results) > 0:
+        results = current_session_results
+        st.info("📊 Showing current session evaluation results.")
     elif not raw_df.empty:
         # If no current session results, show historical data from CSV
         results = raw_df.to_dict('records')
-        st.info("📊 Showing historical evaluation results from saved data.")
+        st.info(f"📊 Showing historical evaluation results from saved data ({len(results)} records).")
     else:
         results = []
+        # Debug: Show why no results are available
+        with st.expander("🔍 Debug: Why no results?", expanded=False):
+            st.write(f"**Current session results:** {len(current_session_results)} items")
+            st.write(f"**Raw DataFrame:** {len(raw_df)} rows")
+            st.write(f"**Raw path:** `{raw_path}`")
+            abs_raw_path = Path(raw_path).resolve() if raw_path else None
+            st.write(f"**Absolute path:** `{abs_raw_path}`")
+            st.write(f"**File exists:** {abs_raw_path.exists() if abs_raw_path else False}")
+            if abs_raw_path and abs_raw_path.exists():
+                st.write(f"**File size:** {abs_raw_path.stat().st_size} bytes")
     
     # Calculate success count and display results if available
     if results:
