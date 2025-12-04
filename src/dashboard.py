@@ -2259,7 +2259,10 @@ with tab1:
                                         "cost_usd_input": 0.0,
                                         "cost_usd_output": 0.0,
                                         "cost_usd_total": 0.0,
-                                        "response": ""
+                                        "response": "",
+                                        "response_format": response_format,
+                                        "system_prompt": current_system_prompt if current_system_prompt else None,
+                                        "system_prompt_index": sys_prompt_idx if current_system_prompt else None
                                     }
                                     results.append(error_metric)
                                     continue
@@ -2282,7 +2285,10 @@ with tab1:
                                         "cost_usd_input": 0.0,
                                         "cost_usd_output": 0.0,
                                         "cost_usd_total": 0.0,
-                                        "response": ""
+                                        "response": "",
+                                        "response_format": response_format,
+                                        "system_prompt": current_system_prompt if current_system_prompt else None,
+                                        "system_prompt_index": sys_prompt_idx if current_system_prompt else None
                                     }
                                     results.append(error_metric)
                                     continue
@@ -2444,25 +2450,29 @@ with tab1:
                                     st.error(f"❌ **Exception evaluating {model_name}**: {str(e)}")
                                     import traceback
                                     st.code(traceback.format_exc())
-                                error_metric = {
-                                    "timestamp": datetime.utcnow().isoformat() + "Z",
-                                    "run_id": f"dashboard_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-                                    "model_name": model.get("name", "unknown"),
-                                    "model_id": model.get("bedrock_model_id", "unknown"),
-                                    "prompt_id": f"prompt_{prompt_idx+1}" if len(prompts_to_evaluate) > 1 else None,
-                                    "input_prompt": final_prompt,  # Store input prompt even for errors
-                                    "input_tokens": 0,
-                                    "output_tokens": 0,
-                                    "latency_ms": 0,
-                                    "json_valid": False,
-                                    "error": str(e),
-                                    "status": "error",
-                                    "cost_usd_input": 0.0,
-                                    "cost_usd_output": 0.0,
-                                    "cost_usd_total": 0.0,
-                                    "response": ""
-                                }
-                                results.append(error_metric)
+                                    # Create error metric INSIDE the except block so 'e' is in scope
+                                    error_metric = {
+                                        "timestamp": datetime.utcnow().isoformat() + "Z",
+                                        "run_id": f"dashboard_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                                        "model_name": model.get("name", "unknown"),
+                                        "model_id": model.get("bedrock_model_id", "unknown"),
+                                        "prompt_id": f"prompt_{prompt_idx+1}" if len(prompts_to_evaluate) > 1 else None,
+                                        "input_prompt": final_prompt,  # Store input prompt even for errors
+                                        "input_tokens": 0,
+                                        "output_tokens": 0,
+                                        "latency_ms": 0,
+                                        "json_valid": False,
+                                        "error": str(e),
+                                        "status": "error",
+                                        "cost_usd_input": 0.0,
+                                        "cost_usd_output": 0.0,
+                                        "cost_usd_total": 0.0,
+                                        "response": "",
+                                        "response_format": response_format,  # Add format info
+                                        "system_prompt": current_system_prompt if current_system_prompt else None,
+                                        "system_prompt_index": sys_prompt_idx if current_system_prompt else None
+                                    }
+                                    results.append(error_metric)
                     
                     progress_bar.progress(1.0)
                     status.update(label=" Evaluation complete! Generating insights...", state="complete")
