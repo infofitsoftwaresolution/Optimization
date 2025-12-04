@@ -1947,16 +1947,20 @@ def load_data(raw_path: str, agg_path: str, cache_key: int = 0):
     raw_df = pd.DataFrame()
     agg_df = pd.DataFrame()
     
+    # Convert to absolute paths for file operations
+    abs_raw_path = Path(raw_path).resolve() if raw_path else None
+    abs_agg_path = Path(agg_path).resolve() if agg_path else None
+    
     # Debug logging
-    print(f"🔍 load_data called: raw_path={raw_path}, cache_key={cache_key}")
-    print(f"   File exists: {Path(raw_path).exists()}")
+    print(f"🔍 load_data called: raw_path={raw_path}, abs_path={abs_raw_path}, cache_key={cache_key}")
+    print(f"   File exists: {abs_raw_path.exists() if abs_raw_path else False}")
     
     try:
-        if Path(raw_path).exists():
+        if abs_raw_path and abs_raw_path.exists():
             # Read CSV with proper handling of multi-line fields
             try:
                 raw_df = pd.read_csv(
-                    raw_path,
+                    abs_raw_path,
                     quoting=1,  # QUOTE_ALL
                     escapechar=None,
                     doublequote=True,
@@ -1984,10 +1988,10 @@ def load_data(raw_path: str, agg_path: str, cache_key: int = 0):
         pass  # Errors handled in sidebar
     
     try:
-        if Path(agg_path).exists():
+        if abs_agg_path and abs_agg_path.exists():
             try:
                 agg_df = pd.read_csv(
-                    agg_path,
+                    abs_agg_path,
                     quoting=1,
                     escapechar=None,
                     doublequote=True,
