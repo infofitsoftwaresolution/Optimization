@@ -36,7 +36,8 @@ class BedrockEvaluator:
         model: Dict[str, Any],
         prompt_id: Optional[int] = None,
         expected_json: bool = False,
-        run_id: Optional[str] = None
+        run_id: Optional[str] = None,
+        system_prompt: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Evaluate a single prompt against a model.
@@ -47,6 +48,7 @@ class BedrockEvaluator:
             prompt_id: Optional prompt identifier
             expected_json: Whether JSON response is expected
             run_id: Optional run identifier for grouping
+            system_prompt: Optional system prompt to prepend to user prompt
         
         Returns:
             Dictionary with evaluation metrics
@@ -59,8 +61,14 @@ class BedrockEvaluator:
         provider = model.get("provider", "").lower()
         tokenizer_type = model.get("tokenizer", "heuristic")
         
+        # Combine system prompt with user prompt if provided
+        # For Bedrock models, we prepend system prompt to user prompt
+        final_prompt = prompt
+        if system_prompt and system_prompt.strip():
+            final_prompt = f"{system_prompt.strip()}\n\n{prompt}"
+        
         # Count input tokens
-        input_tokens = count_tokens(tokenizer_type, prompt)
+        input_tokens = count_tokens(tokenizer_type, final_prompt)
         
         # Prepare generation parameters
         gen_params = self.model_registry.get_generation_params(model)
@@ -72,7 +80,8 @@ class BedrockEvaluator:
             "model_name": model_name,
             "model_id": model_id,
             "prompt_id": prompt_id,
-            "input_prompt": prompt,  # Store the input prompt for display
+            "input_prompt": prompt,  # Store the original user prompt for display
+            "system_prompt": system_prompt if system_prompt else None,  # Store system prompt if used
             "input_tokens": input_tokens,
             "output_tokens": 0,
             "latency_ms": 0,
@@ -89,7 +98,7 @@ class BedrockEvaluator:
         try:
             with Stopwatch() as timer:
                 response_text, output_tokens_actual, input_tokens_actual = self._invoke_model(
-                    prompt, model, provider, gen_params
+                    final_prompt, model, provider, gen_params
                 )
             
             metrics["latency_ms"] = timer.elapsed_ms

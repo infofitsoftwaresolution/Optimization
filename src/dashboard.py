@@ -1699,6 +1699,36 @@ with st.sidebar:
             help="Convert the prompt to JSON format before sending to models",
             key="format_as_json_sidebar"
         )
+        
+        # System Prompts Section
+        st.markdown("---")
+        st.markdown("#### 🤖 System Prompts")
+        system_prompts_input = st.text_area(
+            "System Prompts (one per line)",
+            value="",
+            help="Enter multiple system prompts, one per line. Each prompt will be tested with all models. Leave empty to skip system prompts.",
+            key="system_prompts_input",
+            height=150
+        )
+        
+        # Parse system prompts from text area
+        system_prompts = []
+        if system_prompts_input and system_prompts_input.strip():
+            system_prompts = [sp.strip() for sp in system_prompts_input.strip().split('\n') if sp.strip()]
+        
+        if system_prompts:
+            st.info(f"📝 **{len(system_prompts)} system prompt(s)** will be tested with each model")
+            with st.expander("View System Prompts", expanded=False):
+                for idx, sp in enumerate(system_prompts, 1):
+                    st.text_area(
+                        f"System Prompt {idx}",
+                        value=sp,
+                        height=80,
+                        key=f"system_prompt_view_{idx}",
+                        disabled=True
+                    )
+        else:
+            st.caption("💡 Tip: Add system prompts to test how they affect model responses")
     
     # Model Selection in Sidebar
     st.markdown("###  Select Models")
@@ -2069,16 +2099,28 @@ with tab1:
                     results = []
                     progress_bar = st.progress(0)
                     
+                    # Handle system prompts: if none provided, use empty list with one None entry
+                    system_prompts_to_test = system_prompts if system_prompts else [None]
+                    
                     # Calculate total evaluations (including master model if enabled)
-                    total_evaluations = len(prompts_to_evaluate) * len(selected_models)
+                    # For each system prompt, evaluate all user prompts with all models
+                    total_evaluations = len(system_prompts_to_test) * len(prompts_to_evaluate) * len(selected_models)
                     if use_master:
-                        total_evaluations += len(prompts_to_evaluate)  # Add master model evaluations
+                        total_evaluations += len(system_prompts_to_test) * len(prompts_to_evaluate)  # Add master model evaluations
                     current_evaluation = 0
                     
-                    # Store master responses for each prompt
+                    # Store master responses for each prompt/system prompt combination
                     master_responses = {}
                     
-                    for prompt_idx, current_prompt in enumerate(prompts_to_evaluate):
+                    # Iterate through system prompts
+                    for sys_prompt_idx, current_system_prompt in enumerate(system_prompts_to_test):
+                        system_prompt_label = f"System Prompt {sys_prompt_idx + 1}" if current_system_prompt else "No System Prompt"
+                        if current_system_prompt:
+                            st.markdown(f"### 🤖 {system_prompt_label}")
+                            with st.expander(f"View {system_prompt_label}", expanded=False):
+                                st.text(current_system_prompt)
+                        
+                        for prompt_idx, current_prompt in enumerate(prompts_to_evaluate):
                         # Get metadata for this prompt if available
                         prompt_meta = prompt_metadata_map.get(current_prompt, {})
                         prompt_expected_json = prompt_meta.get("expected_json", expect_json)
@@ -2089,7 +2131,8 @@ with tab1:
                         if use_master and master_evaluator:
                             try:
                                 current_evaluation += 1
-                                status.update(label=f" Getting master model response for prompt {prompt_idx+1}/{len(prompts_to_evaluate)}... ({current_evaluation}/{total_evaluations})")
+                                sys_prompt_info = f" (System Prompt {sys_prompt_idx+1}/{len(system_prompts_to_test)})" if current_system_prompt else ""
+                                status.update(label=f" Getting master model response for prompt {prompt_idx+1}/{len(prompts_to_evaluate)}{sys_prompt_info}... ({current_evaluation}/{total_evaluations})")
                                 progress_bar.progress(current_evaluation / total_evaluations)
                                 
                                 # Format prompt for master model based on response format
@@ -2118,14 +2161,19 @@ with tab1:
                                 master_metrics = master_evaluator.evaluate_prompt(
                                     prompt=final_prompt,
                                     temperature=gen_params.get("temperature", 0.7),
-                                    max_tokens=gen_params.get("max_tokens", 1500)
+                                    max_tokens=gen_params.get("max_tokens", 1500),
+                                    system_prompt=current_system_prompt
                                 )
                                 
                                 if master_metrics.get("status") == "success":
                                     master_response = master_metrics.get("response", "")
-                                    master_responses[current_prompt] = master_response
+                                    # Store master response with system prompt key
+                                    master_key = (current_prompt, current_system_prompt)
+                                    master_responses[master_key] = master_response
                                     # Store master model metrics for reference
                                     master_metrics["is_master"] = True
+                                    master_metrics["system_prompt"] = current_system_prompt if current_system_prompt else None
+                                    master_metrics["system_prompt_index"] = sys_prompt_idx if current_system_prompt else None
                                     results.append(master_metrics)
                                     st.success(f" Master model response received ({len(master_response)} chars)")
                                 else:
@@ -2187,7 +2235,8 @@ with tab1:
                             
                             current_evaluation += 1
                             model_name = model.get('name', 'unknown')
-                            status.update(label=f" Testing {model_name} with prompt {prompt_idx+1}/{len(prompts_to_evaluate)}... ({current_evaluation}/{total_evaluations})")
+                            sys_prompt_info = f" (System Prompt {sys_prompt_idx+1}/{len(system_prompts_to_test)})" if current_system_prompt else ""
+                            status.update(label=f" Testing {model_name} with prompt {prompt_idx+1}/{len(prompts_to_evaluate)}{sys_prompt_info}... ({current_evaluation}/{total_evaluations})")
                             progress_bar.progress(current_evaluation / total_evaluations)
                             
                             # REAL-TIME LOGGING: Log which model we're about to evaluate
@@ -2230,11 +2279,14 @@ with tab1:
                                         model=model,
                                         prompt_id=prompt_prompt_id,
                                         expected_json=(fmt == "json" and prompt_expected_json),
-                                        run_id=f"dashboard_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                                        run_id=f"dashboard_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                                        system_prompt=current_system_prompt
                                     )
                                     
-                                    # Add format tracking to metrics
+                                    # Add format tracking and system prompt tracking to metrics
                                     metrics["response_format"] = fmt
+                                    metrics["system_prompt"] = current_system_prompt if current_system_prompt else None
+                                    metrics["system_prompt_index"] = sys_prompt_idx if current_system_prompt else None
                                     format_results.append(metrics)
                                 
                                 # Process each format result for similarity calculation and append
@@ -2244,8 +2296,9 @@ with tab1:
                                         metrics = fmt_metrics
                                         
                                         # Calculate similarity if master model is enabled
-                                        # Use master_response from the current prompt's evaluation
-                                        current_master_response = master_responses.get(current_prompt, None)
+                                        # Use master_response from the current prompt/system prompt combination
+                                        master_key = (current_prompt, current_system_prompt)
+                                        current_master_response = master_responses.get(master_key, None)
                                         if use_master and current_master_response and metrics.get("status") == "success":
                                             candidate_response = metrics.get("response", "")
                                             if candidate_response:
@@ -2779,6 +2832,113 @@ with tab1:
                             st.plotly_chart(fig_output_tokens, use_container_width=True)
                 else:
                     st.info("⚠️ Format comparison requires results from both JSON and TOON formats. Make sure 'Compare Formats' is enabled and evaluation completed successfully.")
+            
+            # System Prompt Comparison Section
+            if system_prompts and len(results) > 0:
+                st.markdown("---")
+                st.markdown("### 🤖 System Prompt Comparison")
+                
+                # Filter out master model results
+                model_results = [r for r in results if not r.get('is_master', False)]
+                
+                if model_results:
+                    # Group results by system prompt
+                    system_prompt_groups = {}
+                    for r in model_results:
+                        sys_prompt = r.get('system_prompt', None)
+                        sys_prompt_key = sys_prompt if sys_prompt else "No System Prompt"
+                        if sys_prompt_key not in system_prompt_groups:
+                            system_prompt_groups[sys_prompt_key] = []
+                        system_prompt_groups[sys_prompt_key].append(r)
+                    
+                    if len(system_prompt_groups) > 1:  # Only show if multiple system prompts were tested
+                        comparison_data = []
+                        
+                        for sys_prompt_key, group_results in system_prompt_groups.items():
+                            # Calculate averages for this system prompt
+                            avg_latency = sum(r.get('latency_ms', 0) for r in group_results) / len(group_results) if group_results else 0
+                            avg_input_tokens = sum(r.get('input_tokens', 0) for r in group_results) / len(group_results) if group_results else 0
+                            avg_output_tokens = sum(r.get('output_tokens', 0) for r in group_results) / len(group_results) if group_results else 0
+                            avg_cost = sum(r.get('cost_usd_total', 0) for r in group_results) / len(group_results) if group_results else 0
+                            total_prompts = len(group_results)
+                            
+                            # Get system prompt preview (first 50 chars)
+                            sys_prompt_preview = sys_prompt_key[:50] + "..." if len(sys_prompt_key) > 50 else sys_prompt_key
+                            
+                            comparison_data.append({
+                                'System Prompt': sys_prompt_preview,
+                                'Full System Prompt': sys_prompt_key,
+                                'Latency (ms)': round(avg_latency, 2),
+                                'Input Tokens': round(avg_input_tokens, 1),
+                                'Output Tokens': round(avg_output_tokens, 1),
+                                'Cost (USD)': round(avg_cost, 6),
+                                'Evaluations': total_prompts
+                            })
+                        
+                        if comparison_data:
+                            comparison_df = pd.DataFrame(comparison_data)
+                            
+                            # Display comparison table
+                            st.dataframe(comparison_df[['System Prompt', 'Latency (ms)', 'Input Tokens', 'Output Tokens', 'Cost (USD)', 'Evaluations']], use_container_width=True)
+                            
+                            # Create comparison charts
+                            col1, col2 = st.columns(2)
+                            
+                            with col1:
+                                # Latency comparison
+                                fig_latency = go.Figure()
+                                for idx, row in comparison_df.iterrows():
+                                    fig_latency.add_trace(go.Bar(
+                                        name=row['System Prompt'],
+                                        x=[row['System Prompt']],
+                                        y=[row['Latency (ms)']],
+                                        text=[f"{row['Latency (ms)']:.1f}ms"],
+                                        textposition='auto'
+                                    ))
+                                
+                                fig_latency.update_layout(
+                                    title='Average Latency by System Prompt (ms)',
+                                    barmode='group',
+                                    height=400,
+                                    template='plotly_white',
+                                    xaxis_title='System Prompt',
+                                    yaxis_title='Latency (ms)',
+                                    xaxis={'tickangle': -45}
+                                )
+                                st.plotly_chart(fig_latency, use_container_width=True)
+                            
+                            with col2:
+                                # Cost comparison
+                                fig_cost = go.Figure()
+                                for idx, row in comparison_df.iterrows():
+                                    fig_cost.add_trace(go.Bar(
+                                        name=row['System Prompt'],
+                                        x=[row['System Prompt']],
+                                        y=[row['Cost (USD)']],
+                                        text=[f"${row['Cost (USD)']:.6f}"],
+                                        textposition='auto'
+                                    ))
+                                
+                                fig_cost.update_layout(
+                                    title='Average Cost by System Prompt (USD)',
+                                    barmode='group',
+                                    height=400,
+                                    template='plotly_white',
+                                    xaxis_title='System Prompt',
+                                    yaxis_title='Cost (USD)',
+                                    xaxis={'tickangle': -45}
+                                )
+                                st.plotly_chart(fig_cost, use_container_width=True)
+                            
+                            # Show full system prompts in expander
+                            with st.expander("📝 View Full System Prompts", expanded=False):
+                                for idx, row in comparison_df.iterrows():
+                                    st.markdown(f"**System Prompt {idx + 1}:**")
+                                    st.text(row['Full System Prompt'])
+                                    st.markdown("---")
+                    else:
+                        st.info("ℹ️ Only one system prompt was tested. Add multiple system prompts to see comparisons.")
+            
             # Quick evaluation summary
             if results:
                 eval_col1, eval_col2, eval_col3, eval_col4 = st.columns(4)

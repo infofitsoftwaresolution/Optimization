@@ -59,7 +59,8 @@ class MasterModelEvaluator:
         prompt: str,
         temperature: float = 0.7,
         max_tokens: int = 1500,
-        model_id: Optional[str] = None
+        model_id: Optional[str] = None,
+        system_prompt: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Evaluate a prompt against the master model.
@@ -69,6 +70,7 @@ class MasterModelEvaluator:
             temperature: Temperature for generation
             max_tokens: Maximum tokens to generate
             model_id: Optional specific model ID (overrides model_type)
+            system_prompt: Optional system prompt to use as system message
         
         Returns:
             Dictionary with evaluation metrics including response
@@ -79,8 +81,9 @@ class MasterModelEvaluator:
         else:
             openai_model_id = self.model_map.get(self.model_type, "gpt-3.5-turbo")
         
-        # Count input tokens
-        input_tokens = count_tokens("gpt2", prompt)  # Use GPT-2 tokenizer as approximation
+        # Count input tokens (include system prompt if provided)
+        full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+        input_tokens = count_tokens("gpt2", full_prompt)  # Use GPT-2 tokenizer as approximation
         
         # Initialize metrics
         metrics = {
@@ -88,6 +91,7 @@ class MasterModelEvaluator:
             "model_name": f"Master: {openai_model_id}",
             "model_id": openai_model_id,
             "input_prompt": prompt,
+            "system_prompt": system_prompt if system_prompt else None,
             "input_tokens": input_tokens,
             "output_tokens": 0,
             "latency_ms": 0,
@@ -96,15 +100,19 @@ class MasterModelEvaluator:
             "error": None,
         }
         
+        # Prepare messages with system prompt if provided
+        messages = []
+        if system_prompt and system_prompt.strip():
+            messages.append({"role": "system", "content": system_prompt.strip()})
+        messages.append({"role": "user", "content": prompt})
+        
         # Make API call with timing
         timer = None
         try:
             with Stopwatch() as timer:
                 response = self.client.chat.completions.create(
                     model=openai_model_id,
-                    messages=[
-                        {"role": "user", "content": prompt}
-                    ],
+                    messages=messages,
                     temperature=temperature,
                     max_tokens=max_tokens,
                 )
