@@ -2572,6 +2572,25 @@ with tab1:
                     import time
                     time.sleep(0.5)  # Give file system time to flush
                     
+                    # Verify file exists at the expected path
+                    saved_file_path = metrics_logger.raw_csv_path.resolve()
+                    file_exists_after_save = saved_file_path.exists()
+                    file_size_after_save = saved_file_path.stat().st_size if file_exists_after_save else 0
+                    
+                    st.write(f"🔍 **Post-save verification:**")
+                    st.write(f"   - **File path:** `{saved_file_path}`")
+                    st.write(f"   - **File exists:** {file_exists_after_save}")
+                    st.write(f"   - **File size:** {file_size_after_save} bytes")
+                    
+                    # Verify the save path matches the load path
+                    expected_load_path = Path(raw_path).resolve()
+                    path_matches = str(saved_file_path) == str(expected_load_path)
+                    st.write(f"   - **Save path matches load path:** {path_matches}")
+                    if not path_matches:
+                        st.warning(f"⚠️ **Path mismatch detected!**")
+                        st.write(f"      Save path: `{saved_file_path}`")
+                        st.write(f"      Load path: `{expected_load_path}`")
+                    
                     # Read CSV directly from disk to verify (real-time check)
                     saved_df = metrics_logger.get_metrics_df()
                     if not saved_df.empty and 'model_name' in saved_df.columns:
@@ -2586,7 +2605,10 @@ with tab1:
                                 count = len(saved_df[saved_df['model_name'] == model])
                                 st.write(f"   - **{model}**: {count} row(s)")
                     else:
-                        st.error(f"❌ **Validation Error**: CSV appears empty after save! Expected {len(results)} rows.")
+                        if not file_exists_after_save:
+                            st.error(f"❌ **File not created!** Expected file at: `{saved_file_path}`")
+                        else:
+                            st.error(f"❌ **Validation Error**: CSV appears empty after save! Expected {len(results)} rows. File size: {file_size_after_save} bytes")
                         st.stop()
                     
                     # Regenerate aggregated report to ensure all graphs are synced
@@ -2618,11 +2640,16 @@ with tab1:
         st.cache_data.clear()  # Clear all caches
     
     # Reload data - use absolute paths to ensure consistency
-    abs_raw_path = Path(raw_path).resolve() if raw_path else None
-    abs_agg_path = Path(agg_path).resolve() if agg_path else None
-    raw_df, agg_df = load_data(str(abs_raw_path) if abs_raw_path else raw_path, 
-                               str(abs_agg_path) if abs_agg_path else agg_path, 
-                               st.session_state.data_reload_key)
+    # Recalculate project root to match save logic
+    current_project_root = Path(__file__).parent.parent
+    expected_raw_path = str(current_project_root / "data" / "runs" / "raw_metrics.csv")
+    expected_agg_path = str(current_project_root / "data" / "runs" / "model_comparison.csv")
+    
+    # Use the recalculated paths to ensure they match what we're saving to
+    abs_raw_path = Path(expected_raw_path).resolve()
+    abs_agg_path = Path(expected_agg_path).resolve()
+    
+    raw_df, agg_df = load_data(expected_raw_path, expected_agg_path, st.session_state.data_reload_key)
     
     # Debug: Log data loading status
     if st.session_state.get('debug_data_loading', False):
