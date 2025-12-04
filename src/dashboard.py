@@ -764,6 +764,61 @@ with st.sidebar:
             label_visibility="visible"
         )
     
+    # System Prompts Section - Right after Custom Prompt
+    with st.expander("🤖 System Prompts", expanded=False):
+        # Initialize system prompts in session state if not exists
+        if 'system_prompts_list' not in st.session_state:
+            st.session_state.system_prompts_list = []
+        
+        # Input field for adding new system prompt
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            new_system_prompt = st.text_input(
+                "Add System Prompt",
+                placeholder="Enter a system prompt...",
+                help="System prompts guide the model's behavior. Add multiple to compare their effects.",
+                key="new_system_prompt_input",
+                label_visibility="visible"
+            )
+        with col2:
+            st.write("")  # Spacing
+            st.write("")  # Spacing
+            add_button = st.button("➕ Add", key="add_system_prompt_btn", use_container_width=True)
+        
+        # Handle adding new system prompt
+        if add_button and new_system_prompt.strip():
+            if new_system_prompt.strip() not in st.session_state.system_prompts_list:
+                st.session_state.system_prompts_list.append(new_system_prompt.strip())
+                st.success(f"✅ Added system prompt {len(st.session_state.system_prompts_list)}")
+                st.rerun()
+            else:
+                st.warning("⚠️ This system prompt already exists")
+        
+        # Display added system prompts with remove buttons
+        if st.session_state.system_prompts_list:
+            st.markdown("**Added System Prompts:**")
+            for idx, sys_prompt in enumerate(st.session_state.system_prompts_list):
+                col1, col2 = st.columns([4, 1])
+                with col1:
+                    st.text_area(
+                        f"System Prompt {idx + 1}",
+                        value=sys_prompt,
+                        height=60,
+                        key=f"system_prompt_display_{idx}",
+                        disabled=True,
+                        label_visibility="collapsed"
+                    )
+                with col2:
+                    st.write("")  # Spacing
+                    st.write("")  # Spacing
+                    if st.button("🗑️", key=f"remove_system_prompt_{idx}", help="Remove this system prompt"):
+                        st.session_state.system_prompts_list.pop(idx)
+                        st.rerun()
+            
+            st.info(f"📝 **{len(st.session_state.system_prompts_list)} system prompt(s)** will be tested with each model")
+        else:
+            st.caption("💡 Tip: Add system prompts to test how they affect model responses")
+    
     # File Upload Section in Sidebar
     with st.expander("📁 Upload File (JSON or CSV)", expanded=False):
         uploaded_file = st.file_uploader(
@@ -1699,36 +1754,6 @@ with st.sidebar:
             help="Convert the prompt to JSON format before sending to models",
             key="format_as_json_sidebar"
         )
-        
-        # System Prompts Section
-        st.markdown("---")
-        st.markdown("#### 🤖 System Prompts")
-        system_prompts_input = st.text_area(
-            "System Prompts (one per line)",
-            value="",
-            help="Enter multiple system prompts, one per line. Each prompt will be tested with all models. Leave empty to skip system prompts.",
-            key="system_prompts_input",
-            height=150
-        )
-        
-        # Parse system prompts from text area
-        system_prompts = []
-        if system_prompts_input and system_prompts_input.strip():
-            system_prompts = [sp.strip() for sp in system_prompts_input.strip().split('\n') if sp.strip()]
-        
-        if system_prompts:
-            st.info(f"📝 **{len(system_prompts)} system prompt(s)** will be tested with each model")
-            with st.expander("View System Prompts", expanded=False):
-                for idx, sp in enumerate(system_prompts, 1):
-                    st.text_area(
-                        f"System Prompt {idx}",
-                        value=sp,
-                        height=80,
-                        key=f"system_prompt_view_{idx}",
-                        disabled=True
-                    )
-        else:
-            st.caption("💡 Tip: Add system prompts to test how they affect model responses")
     
     # Model Selection in Sidebar
     st.markdown("###  Select Models")
@@ -2100,7 +2125,9 @@ with tab1:
                     progress_bar = st.progress(0)
                     
                     # Handle system prompts: if none provided, use empty list with one None entry
-                    system_prompts_to_test = system_prompts if system_prompts else [None]
+                    # Get system prompts from session state
+                    system_prompts_from_state = st.session_state.get('system_prompts_list', [])
+                    system_prompts_to_test = system_prompts_from_state if system_prompts_from_state else [None]
                     
                     # Calculate total evaluations (including master model if enabled)
                     # For each system prompt, evaluate all user prompts with all models
@@ -2834,7 +2861,8 @@ with tab1:
                     st.info("⚠️ Format comparison requires results from both JSON and TOON formats. Make sure 'Compare Formats' is enabled and evaluation completed successfully.")
             
             # System Prompt Comparison Section
-            if system_prompts and len(results) > 0:
+            system_prompts_from_state = st.session_state.get('system_prompts_list', [])
+            if system_prompts_from_state and len(results) > 0:
                 st.markdown("---")
                 st.markdown("### 🤖 System Prompt Comparison")
                 
